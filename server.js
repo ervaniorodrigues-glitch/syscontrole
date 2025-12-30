@@ -3241,45 +3241,73 @@ app.post('/api/backup/restaurar', async (req, res) => {
 });
 
 // Zerar funcionários
-app.delete('/api/backup/zerar/funcionarios', (req, res) => {
-    db.serialize(() => {
-        db.run('DELETE FROM SSMA', function(err) {
-            if (err) return res.status(500).json({ success: false, error: err.message });
-            
-            db.run("DELETE FROM sqlite_sequence WHERE name='SSMA'", function(err) {
-                if (err) console.log('Erro ao resetar sequence:', err);
-                res.json({ success: true, message: 'Funcionários zerados com sucesso' });
+app.delete('/api/backup/zerar/funcionarios', async (req, res) => {
+    try {
+        await new Promise((resolve, reject) => {
+            db.run('DELETE FROM SSMA', [], (err) => {
+                if (err) reject(err);
+                else resolve();
             });
         });
-    });
+        // Tentar resetar sequence (só funciona no SQLite)
+        try {
+            await new Promise((resolve) => {
+                db.run("DELETE FROM sqlite_sequence WHERE name='SSMA'", [], () => resolve());
+            });
+        } catch (e) { /* ignora no PostgreSQL */ }
+        
+        console.log('✅ Funcionários zerados com sucesso');
+        res.json({ success: true, message: 'Funcionários zerados com sucesso' });
+    } catch (err) {
+        console.error('Erro ao zerar funcionários:', err);
+        res.status(500).json({ success: false, error: err.message });
+    }
 });
 
 // Zerar fornecedores
-app.delete('/api/backup/zerar/fornecedores', (req, res) => {
-    db.serialize(() => {
-        db.run('DELETE FROM FORNECEDOR', function(err) {
-            if (err) return res.status(500).json({ success: false, error: err.message });
-            
-            db.run("DELETE FROM sqlite_sequence WHERE name='FORNECEDOR'", function(err) {
-                if (err) console.log('Erro ao resetar sequence:', err);
-                res.json({ success: true, message: 'Fornecedores zerados com sucesso' });
+app.delete('/api/backup/zerar/fornecedores', async (req, res) => {
+    try {
+        await new Promise((resolve, reject) => {
+            db.run('DELETE FROM FORNECEDOR', [], (err) => {
+                if (err) reject(err);
+                else resolve();
             });
         });
-    });
+        try {
+            await new Promise((resolve) => {
+                db.run("DELETE FROM sqlite_sequence WHERE name='FORNECEDOR'", [], () => resolve());
+            });
+        } catch (e) { /* ignora no PostgreSQL */ }
+        
+        console.log('✅ Fornecedores zerados com sucesso');
+        res.json({ success: true, message: 'Fornecedores zerados com sucesso' });
+    } catch (err) {
+        console.error('Erro ao zerar fornecedores:', err);
+        res.status(500).json({ success: false, error: err.message });
+    }
 });
 
 // Zerar documentação
-app.delete('/api/backup/zerar/documentacao', (req, res) => {
-    db.serialize(() => {
-        db.run('DELETE FROM DOCUMENTACAO', function(err) {
-            if (err) return res.status(500).json({ success: false, error: err.message });
-            
-            db.run("DELETE FROM sqlite_sequence WHERE name='DOCUMENTACAO'", function(err) {
-                if (err) console.log('Erro ao resetar sequence:', err);
-                res.json({ success: true, message: 'Documentação zerada com sucesso' });
+app.delete('/api/backup/zerar/documentacao', async (req, res) => {
+    try {
+        await new Promise((resolve, reject) => {
+            db.run('DELETE FROM DOCUMENTACAO', [], (err) => {
+                if (err) reject(err);
+                else resolve();
             });
         });
-    });
+        try {
+            await new Promise((resolve) => {
+                db.run("DELETE FROM sqlite_sequence WHERE name='DOCUMENTACAO'", [], () => resolve());
+            });
+        } catch (e) { /* ignora no PostgreSQL */ }
+        
+        console.log('✅ Documentação zerada com sucesso');
+        res.json({ success: true, message: 'Documentação zerada com sucesso' });
+    } catch (err) {
+        console.error('Erro ao zerar documentação:', err);
+        res.status(500).json({ success: false, error: err.message });
+    }
 });
 
 // Zerar lista de presença
