@@ -3106,26 +3106,49 @@ app.post('/api/backup/restaurar', async (req, res) => {
         
         // Restaurar funcionários
         if (backup.dados.funcionarios && backup.dados.funcionarios.length > 0) {
+            // Colunas válidas da tabela SSMA
+            const colunasValidas = [
+                'Nome', 'Empresa', 'Funcao', 'Vencimento', 'Anotacoes', 'Situacao', 'Ambientacao',
+                'Nr06_DataEmissao', 'Nr06_Vencimento', 'Nr06_Status',
+                'Nr10_DataEmissao', 'Nr10_Vencimento', 'Nr10_Status',
+                'Nr11_DataEmissao', 'Nr11_Vencimento', 'Nr11_Status',
+                'Nr12_DataEmissao', 'Nr12_Vencimento', 'Nr12_Status',
+                'Nr17_DataEmissao', 'Nr17_Vencimento', 'Nr17_Status',
+                'Nr18_DataEmissao', 'Nr18_Vencimento', 'Nr18_Status',
+                'Nr20_DataEmissao', 'Nr20_Vencimento', 'Nr20_Status',
+                'Nr33_DataEmissao', 'Nr33_Vencimento', 'Nr33_Status',
+                'Nr34_DataEmissao', 'Nr34_Vencimento', 'Nr34_Status',
+                'Nr35_DataEmissao', 'Nr35_Vencimento', 'Nr35_Status',
+                'Epi_DataEmissao', 'epiVencimento', 'EpiStatus',
+                'Foto', 'Cadastro'
+            ];
+            
             for (const f of backup.dados.funcionarios) {
                 try {
-                    // Remover id para deixar o banco gerar automaticamente
-                    const funcCopy = { ...f };
-                    delete funcCopy.id;
+                    // Filtrar apenas colunas válidas
+                    const funcFiltrado = {};
+                    for (const col of colunasValidas) {
+                        if (f[col] !== undefined) {
+                            funcFiltrado[col] = f[col];
+                        }
+                    }
                     
-                    const colunas = Object.keys(funcCopy);
-                    const valores = Object.values(funcCopy);
+                    const colunas = Object.keys(funcFiltrado);
+                    const valores = Object.values(funcFiltrado);
                     const placeholders = colunas.map(() => '?').join(', ');
                     
-                    await new Promise((resolve, reject) => {
-                        db.run(`INSERT INTO SSMA (${colunas.join(', ')}) VALUES (${placeholders})`, valores, function(err) {
-                            if (err) {
-                                erros.push('Funcionário ' + f.Nome + ': ' + err.message);
-                            } else {
-                                restaurados.funcionarios++;
-                            }
-                            resolve();
+                    if (colunas.length > 0) {
+                        await new Promise((resolve, reject) => {
+                            db.run(`INSERT INTO SSMA (${colunas.join(', ')}) VALUES (${placeholders})`, valores, function(err) {
+                                if (err) {
+                                    erros.push('Funcionário ' + f.Nome + ': ' + err.message);
+                                } else {
+                                    restaurados.funcionarios++;
+                                }
+                                resolve();
+                            });
                         });
-                    });
+                    }
                 } catch (e) {
                     erros.push('Funcionário ' + f.Nome + ': ' + e.message);
                 }
