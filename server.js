@@ -3061,8 +3061,8 @@ app.get('/api/backup/exportar', (req, res) => {
     });
 });
 
-// Restaurar backup - VERSÃO ROBUSTA
-app.post('/api/backup/restaurar', (req, res) => {
+// Restaurar backup - VERSÃO COMPATÍVEL COM SQLITE E POSTGRESQL
+app.post('/api/backup/restaurar', async (req, res) => {
     const backup = req.body;
     
     if (!backup || !backup.dados) {
@@ -3077,103 +3077,131 @@ app.post('/api/backup/restaurar', (req, res) => {
     let erros = [];
     let restaurados = { funcionarios: 0, fornecedores: 0, documentacao: 0 };
     
-    db.serialize(() => {
+    try {
         // Limpar tabelas existentes
-        db.run('DELETE FROM SSMA');
-        db.run('DELETE FROM FORNECEDOR');
-        db.run('DELETE FROM DOCUMENTACAO');
+        await new Promise((resolve, reject) => {
+            db.run('DELETE FROM SSMA', [], (err) => err ? reject(err) : resolve());
+        });
+        await new Promise((resolve, reject) => {
+            db.run('DELETE FROM FORNECEDOR', [], (err) => err ? reject(err) : resolve());
+        });
+        await new Promise((resolve, reject) => {
+            db.run('DELETE FROM DOCUMENTACAO', [], (err) => err ? reject(err) : resolve());
+        });
         
-        // Resetar IDs
-        db.run("DELETE FROM sqlite_sequence WHERE name='SSMA'");
-        db.run("DELETE FROM sqlite_sequence WHERE name='FORNECEDOR'");
-        db.run("DELETE FROM sqlite_sequence WHERE name='DOCUMENTACAO'");
+        // Resetar sequences (só funciona no SQLite, ignora erro no PostgreSQL)
+        try {
+            await new Promise((resolve) => {
+                db.run("DELETE FROM sqlite_sequence WHERE name='SSMA'", [], () => resolve());
+            });
+            await new Promise((resolve) => {
+                db.run("DELETE FROM sqlite_sequence WHERE name='FORNECEDOR'", [], () => resolve());
+            });
+            await new Promise((resolve) => {
+                db.run("DELETE FROM sqlite_sequence WHERE name='DOCUMENTACAO'", [], () => resolve());
+            });
+        } catch (e) {
+            // Ignora erro no PostgreSQL
+        }
         
-        // Restaurar funcionários - DINÂMICO (pega todas as colunas do backup)
+        // Restaurar funcionários
         if (backup.dados.funcionarios && backup.dados.funcionarios.length > 0) {
-            backup.dados.funcionarios.forEach(f => {
-                const colunas = Object.keys(f);
-                const valores = Object.values(f);
-                const placeholders = colunas.map(() => '?').join(', ');
-                
-                db.run(`INSERT INTO SSMA (${colunas.join(', ')}) VALUES (${placeholders})`, valores, function(err) {
-                    if (err) {
-                        erros.push('Funcionário ' + f.Nome + ': ' + err.message);
-                    } else {
-                        restaurados.funcionarios++;
-                    }
-                });
-            });
-        }
-        
-        // Restaurar fornecedores - DINÂMICO
-        if (backup.dados.fornecedores && backup.dados.fornecedores.length > 0) {
-            backup.dados.fornecedores.forEach(f => {
-                const colunas = Object.keys(f);
-                const valores = Object.values(f);
-                const placeholders = colunas.map(() => '?').join(', ');
-                
-                db.run(`INSERT INTO FORNECEDOR (${colunas.join(', ')}) VALUES (${placeholders})`, valores, function(err) {
-                    if (err) {
-                        erros.push('Fornecedor ' + f.Empresa + ': ' + err.message);
-                    } else {
-                        restaurados.fornecedores++;
-                    }
-                });
-            });
-        }
-        
-        // Restaurar documentação - DINÂMICO
-        if (backup.dados.documentacao && backup.dados.documentacao.length > 0) {
-            backup.dados.documentacao.forEach(d => {
-                const colunas = Object.keys(d);
-                const valores = Object.values(d);
-                const placeholders = colunas.map(() => '?').join(', ');
-                
-                db.run(`INSERT INTO DOCUMENTACAO (${colunas.join(', ')}) VALUES (${placeholders})`, valores, function(err) {
-                    if (err) {
-                        erros.push('Documentação ' + d.empresa + ': ' + err.message);
-                    } else {
-                        restaurados.documentacao++;
-                    }
-                });
-            });
-        }
-        
-        // Restaurar cursos habilitados
-        if (backup.dados.cursosHabilitados && backup.dados.cursosHabilitados.length > 0) {
-            db.run('DELETE FROM habilitar_cursos');
-            backup.dados.cursosHabilitados.forEach(c => {
-                const colunas = Object.keys(c);
-                const valores = Object.values(c);
-                const placeholders = colunas.map(() => '?').join(', ');
-                db.run(`INSERT INTO habilitar_cursos (${colunas.join(', ')}) VALUES (${placeholders})`, valores);
-            });
-        }
-        
-        // Restaurar configuração
-        if (backup.dados.configuracao && Object.keys(backup.dados.configuracao).length > 0) {
-            const config = backup.dados.configuracao;
-            db.run('DELETE FROM configuracao_relatorio WHERE id = 1');
-            const colunas = Object.keys(config);
-            const valores = Object.values(config);
-            const placeholders = colunas.map(() => '?').join(', ');
-            db.run(`INSERT INTO configuracao_relatorio (${colunas.join(', ')}) VALUES (${placeholders})`, valores);
-        }
-        
-        // Resposta final após todas as operações
-        setTimeout(() => {
-            console.log('✅ Restauração concluída:', restaurados);
-            if (erros.length > 0) {
-                console.log('⚠️ Erros:', erros);
+            for (const f of backup.dados.funcionarios) {
+                try {
+                    // Remover id para deixar o banco gerar automaticamente
+                    const funcCopy = { ...f };
+                    delete funcCopy.id;
+                    
+                    const colunas = Object.keys(funcCopy);
+                    const valores = Object.values(funcCopy);
+                    const placeholders = colunas.map(() => '?').join(', ');
+                    
+                    await new Promise((resolve, reject) => {
+                        db.run(`INSERT INTO SSMA (${colunas.join(', ')}) VALUES (${placeholders})`, valores, function(err) {
+                            if (err) {
+                                erros.push('Funcionário ' + f.Nome + ': ' + err.message);
+                            } else {
+                                restaurados.funcionarios++;
+                            }
+                            resolve();
+                        });
+                    });
+                } catch (e) {
+                    erros.push('Funcionário ' + f.Nome + ': ' + e.message);
+                }
             }
-            res.json({ 
-                success: true, 
-                message: 'Backup restaurado com sucesso',
-                restaurados: restaurados,
-                erros: erros.length > 0 ? erros : undefined
-            });
-        }, 500);
-    });
+        }
+        
+        // Restaurar fornecedores
+        if (backup.dados.fornecedores && backup.dados.fornecedores.length > 0) {
+            for (const f of backup.dados.fornecedores) {
+                try {
+                    const fornCopy = { ...f };
+                    delete fornCopy.id;
+                    
+                    const colunas = Object.keys(fornCopy);
+                    const valores = Object.values(fornCopy);
+                    const placeholders = colunas.map(() => '?').join(', ');
+                    
+                    await new Promise((resolve, reject) => {
+                        db.run(`INSERT INTO FORNECEDOR (${colunas.join(', ')}) VALUES (${placeholders})`, valores, function(err) {
+                            if (err) {
+                                erros.push('Fornecedor ' + f.Empresa + ': ' + err.message);
+                            } else {
+                                restaurados.fornecedores++;
+                            }
+                            resolve();
+                        });
+                    });
+                } catch (e) {
+                    erros.push('Fornecedor ' + f.Empresa + ': ' + e.message);
+                }
+            }
+        }
+        
+        // Restaurar documentação
+        if (backup.dados.documentacao && backup.dados.documentacao.length > 0) {
+            for (const d of backup.dados.documentacao) {
+                try {
+                    const docCopy = { ...d };
+                    delete docCopy.id;
+                    
+                    const colunas = Object.keys(docCopy);
+                    const valores = Object.values(docCopy);
+                    const placeholders = colunas.map(() => '?').join(', ');
+                    
+                    await new Promise((resolve, reject) => {
+                        db.run(`INSERT INTO DOCUMENTACAO (${colunas.join(', ')}) VALUES (${placeholders})`, valores, function(err) {
+                            if (err) {
+                                erros.push('Documentação ' + d.empresa + ': ' + err.message);
+                            } else {
+                                restaurados.documentacao++;
+                            }
+                            resolve();
+                        });
+                    });
+                } catch (e) {
+                    erros.push('Documentação ' + d.empresa + ': ' + e.message);
+                }
+            }
+        }
+        
+        console.log('✅ Restauração concluída:', restaurados);
+        if (erros.length > 0) {
+            console.log('⚠️ Erros:', erros.slice(0, 10));
+        }
+        
+        res.json({ 
+            success: true, 
+            message: 'Backup restaurado com sucesso',
+            restaurados: restaurados,
+            erros: erros.length > 0 ? erros.slice(0, 20) : undefined
+        });
+        
+    } catch (error) {
+        console.error('❌ Erro na restauração:', error);
+        res.status(500).json({ success: false, error: error.message });
+    }
 });
 
 // Zerar funcionários
