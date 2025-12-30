@@ -19,20 +19,51 @@ if (DATABASE_URL) {
         _isPostgres: true,
         
         all: function(sql, params, callback) {
+            // Se params é uma função, é o callback
+            if (typeof params === 'function') {
+                callback = params;
+                params = [];
+            }
+            params = params || [];
+            
             const pgSql = this._convertSql(sql);
             this._pool.query(pgSql, params)
-                .then(result => callback(null, result.rows))
-                .catch(err => callback(err));
+                .then(result => {
+                    if (callback) callback(null, result.rows);
+                })
+                .catch(err => {
+                    console.error('PostgreSQL Error (all):', err.message);
+                    if (callback) callback(err);
+                });
         },
         
         get: function(sql, params, callback) {
+            // Se params é uma função, é o callback
+            if (typeof params === 'function') {
+                callback = params;
+                params = [];
+            }
+            params = params || [];
+            
             const pgSql = this._convertSql(sql);
             this._pool.query(pgSql, params)
-                .then(result => callback(null, result.rows[0]))
-                .catch(err => callback(err));
+                .then(result => {
+                    if (callback) callback(null, result.rows[0]);
+                })
+                .catch(err => {
+                    console.error('PostgreSQL Error (get):', err.message);
+                    if (callback) callback(err);
+                });
         },
         
         run: function(sql, params, callback) {
+            // Se params é uma função, é o callback
+            if (typeof params === 'function') {
+                callback = params;
+                params = [];
+            }
+            params = params || [];
+            
             let pgSql = this._convertSql(sql);
             
             // Adicionar RETURNING id para INSERTs
@@ -50,7 +81,8 @@ if (DATABASE_URL) {
                     if (callback) callback.call(context, null);
                 })
                 .catch(err => {
-                    if (callback) callback(err);
+                    console.error('PostgreSQL Error (run):', err.message, '\nSQL:', sql);
+                    if (callback) callback.call({lastID: 0, changes: 0}, err);
                 });
         },
         
@@ -59,7 +91,7 @@ if (DATABASE_URL) {
             
             // Converter ? para $1, $2, etc
             let paramIndex = 0;
-            pgSql = pgSql.replace(/\?/g, () => `$${++paramIndex}`);
+            pgSql = pgSql.replace(/\?/g, () => '$' + (++paramIndex));
             
             // Converter AUTOINCREMENT para SERIAL
             pgSql = pgSql.replace(/INTEGER PRIMARY KEY AUTOINCREMENT/gi, 'SERIAL PRIMARY KEY');
