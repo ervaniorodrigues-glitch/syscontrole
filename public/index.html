@@ -1,0 +1,2071 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>FrmConsulta - SysControle</title>
+    <link rel="stylesheet" href="styles.css">
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🏗️</text></svg>">
+    <script>
+        // Verificar login antes de carregar a página
+        (function() {
+            const user = sessionStorage.getItem('user');
+            if (!user) {
+                window.location.href = '/login.html';
+            }
+        })();
+    </script>
+    <style>
+        /* Bloquear print para usuário comum */
+        @media print {
+            body.user-comum * {
+                display: none !important;
+            }
+            body.user-comum::after {
+                content: "Impressão não permitida para este usuário";
+                display: block;
+                font-size: 24px;
+                text-align: center;
+                padding: 50px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="form-window">
+        <!-- Barra de título igual ao Windows -->
+        <div class="title-bar">
+            <span class="title-text" style="display: none;">FrmConsulta</span>
+            <div class="title-bar-menu">
+                <button class="title-bar-btn" onclick="syscontrole.abrirControlePresenca()" title="Controle de Presença">
+                    <span>📋</span> Presença
+                </button>
+                <button class="title-bar-btn" onclick="syscontrole.abrirHabilitarCursos()" title="Habilitar Cursos">
+                    <span>📚</span> Cursos
+                </button>
+                <button class="title-bar-btn btn-master-only" onclick="syscontrole.abrirGerenciarUsuarios()" title="Gerenciar Usuários">
+                    <span>👥</span> Usuários
+                </button>
+                <button class="title-bar-btn btn-master-only" onclick="syscontrole.abrirBackup()" title="Backup e Manutenção">
+                    <span>🔧</span> Backup
+                </button>
+                <button class="title-bar-btn btn-master-only" onclick="syscontrole.abrirConfiguracoes()" title="Configurações">
+                    <span>⚙️</span> Config
+                </button>
+                <button class="title-bar-btn" onclick="syscontrole.logout()" title="Sair">
+                    <span>🚪</span> Sair
+                </button>
+            </div>
+        </div>
+        
+        <!-- Filtros superiores - igual ao desktop -->
+        <div class="filters-top">
+            <div class="filter-row">
+                <div class="filter-group">
+                    <label>Busca por Nome</label>
+                    <input type="text" id="filtroNome" class="filter-input">
+                </div>
+                <div class="filter-group">
+                    <label>Busca por Empresa</label>
+                    <input type="text" id="filtroEmpresa" class="filter-input">
+                </div>
+                <div class="filter-group">
+                    <label>Busca por Função</label>
+                    <input type="text" id="filtroFuncao" class="filter-input">
+                </div>
+                <div class="filter-group">
+                    <label>Busca entre DATAS</label>
+                    <div class="date-range">
+                        <input type="date" id="dataInicio" class="date-input-calendar" title="Data Início">
+                        <input type="date" id="dataFim" class="date-input-calendar" title="Data Fim">
+                    </div>
+                </div>
+            </div>
+        </div>
+        
+        <!-- Botões de ação - igual ao desktop -->
+        <div class="action-buttons">
+            <button id="btnBuscar" class="action-btn btn-buscar">Buscar</button>
+            <button id="btnAdd" class="action-btn btn-add">Add</button>
+            <button id="btnEditar" class="action-btn btn-editar">Fornecedor</button>
+            <button id="btnLimpar" class="action-btn btn-limpar">Limpar</button>
+            <button id="btnAtivarMultiplos" class="action-btn btn-ativar" onclick="syscontrole.ativarInativarMultiplos(true)" style="display:none;">✓ Ativar</button>
+            <button id="btnInativarMultiplos" class="action-btn btn-inativar" onclick="syscontrole.ativarInativarMultiplos(false)" style="display:none;">✕ Inativar</button>
+            
+            <!-- Radio buttons para exportação da tabela principal -->
+            <div class="export-options-main">
+                <label class="export-radio">
+                    <input type="radio" name="export-type-main" value="excel" checked>
+                    <span>📊 Excel</span>
+                </label>
+                <label class="export-radio">
+                    <input type="radio" name="export-type-main" value="pdf">
+                    <span>📄 PDF</span>
+                </label>
+                <button type="button" class="btn-exportar" onclick="syscontrole.exportarSSMA()">Exportar</button>
+            </div>
+            
+            <div class="status-filter">
+                <div class="toggle-container">
+                    <input type="checkbox" id="chkAtivo" checked class="toggle-input">
+                    <label for="chkAtivo" class="toggle-label">
+                        <span class="toggle-slider"></span>
+                        <span class="toggle-text">Ativo</span>
+                    </label>
+                </div>
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progressFill" style="width: 46%"></div>
+                </div>
+                <span class="progress-text" id="progressText">46%</span>
+            </div>
+        </div>
+        
+        <!-- Tabela principal - igual ao desktop -->
+        <div class="main-table" id="mainTableContainer">
+            <!-- OVERLAY ANTI-FLICKERING -->
+            <div id="updateOverlay" class="update-overlay"></div>
+            
+            <table id="tabelaSSMA" class="desktop-table">
+                <thead>
+                    <tr>
+                        <th class="col-expand">▼</th>
+                        <th class="col-foto">Foto</th>
+                        <th class="col-nome">Nome</th>
+                        <th class="col-empresa">Empresa</th>
+                        <th class="col-funcao">Função</th>
+                        <th class="col-id">ID</th>
+                        <th class="col-venc">Venc-ASO</th>
+                        <th class="col-venc">Venc-NR-06</th>
+                        <th class="col-venc">Venc-NR-10</th>
+                        <th class="col-venc">Venc-NR-11</th>
+                        <th class="col-venc">Venc-NR-12</th>
+                        <th class="col-venc">Venc-NR-17</th>
+                        <th class="col-venc">Venc-NR-18</th>
+                        <th class="col-venc">Venc-NR-20</th>
+                        <th class="col-venc">Venc-NR-33</th>
+                        <th class="col-venc">Venc-NR-34</th>
+                        <th class="col-venc">Venc-NR-35</th>
+                        <th class="col-venc">Venc-EPI</th>
+                    </tr>
+                </thead>
+                <tbody id="tabelaBody" style="will-change: contents; contain: layout style paint;">
+                    <tr class="loading-row">
+                        <td colspan="15" class="loading-cell">
+                            <div class="loading-spinner">🔄</div>
+                            <span>Carregando dados...</span>
+                        </td>
+                    </tr>
+                </tbody>
+            </table>
+        </div>
+        
+        <!-- Rodapé com filtros inteligentes por curso -->
+        <div class="footer-stats">
+            <!-- Linha de filtros por curso -->
+            <div class="courses-filter-row">
+                <!-- ASO -->
+                <div class="course-filter-group">
+                    <div class="course-header">
+                        <label class="course-label">ASO</label>
+                        <div class="course-indicators">
+                            <span class="indicator-label qda-vencido">Qda:</span>
+                            <span class="indicator-count qda-vencido" id="aso-vencido">0</span>
+                            <span class="indicator-label qda-renovar">Qda:</span>
+                            <span class="indicator-count qda-renovar" id="aso-renovar">0</span>
+                        </div>
+                    </div>
+                    <select id="filter-aso" class="course-select" onchange="syscontrole.aplicarFiltrosCursos()">
+                        <option value="">Todos</option>
+                        <option value="ok">OK</option>
+                        <option value="renovar">Renovar</option>
+                        <option value="vencido">Vencido</option>
+                    </select>
+                </div>
+
+                <!-- NR-06 -->
+                <div class="course-filter-group">
+                    <div class="course-header">
+                        <label class="course-label">NR-06</label>
+                        <div class="course-indicators">
+                            <span class="indicator-label qda-vencido">Qda:</span>
+                            <span class="indicator-count qda-vencido" id="nr06-vencido">0</span>
+                            <span class="indicator-label qda-renovar">Qda:</span>
+                            <span class="indicator-count qda-renovar" id="nr06-renovar">0</span>
+                        </div>
+                    </div>
+                    <select id="filter-nr06" class="course-select" onchange="syscontrole.aplicarFiltrosCursos()">
+                        <option value="">Todos</option>
+                        <option value="ok">OK</option>
+                        <option value="renovar">Renovar</option>
+                        <option value="vencido">Vencido</option>
+                    </select>
+                </div>
+
+                <!-- NR-10 -->
+                <div class="course-filter-group">
+                    <div class="course-header">
+                        <label class="course-label">NR-10</label>
+                        <div class="course-indicators">
+                            <span class="indicator-label qda-vencido">Qda:</span>
+                            <span class="indicator-count qda-vencido" id="nr10-vencido">0</span>
+                            <span class="indicator-label qda-renovar">Qda:</span>
+                            <span class="indicator-count qda-renovar" id="nr10-renovar">0</span>
+                        </div>
+                    </div>
+                    <select id="filter-nr10" class="course-select" onchange="syscontrole.aplicarFiltrosCursos()">
+                        <option value="">Todos</option>
+                        <option value="ok">OK</option>
+                        <option value="renovar">Renovar</option>
+                        <option value="vencido">Vencido</option>
+                    </select>
+                </div>
+
+                <!-- NR-11 -->
+                <div class="course-filter-group">
+                    <div class="course-header">
+                        <label class="course-label">NR-11</label>
+                        <div class="course-indicators">
+                            <span class="indicator-label qda-vencido">Qda:</span>
+                            <span class="indicator-count qda-vencido" id="nr11-vencido">0</span>
+                            <span class="indicator-label qda-renovar">Qda:</span>
+                            <span class="indicator-count qda-renovar" id="nr11-renovar">0</span>
+                        </div>
+                    </div>
+                    <select id="filter-nr11" class="course-select" onchange="syscontrole.aplicarFiltrosCursos()">
+                        <option value="">Todos</option>
+                        <option value="ok">OK</option>
+                        <option value="renovar">Renovar</option>
+                        <option value="vencido">Vencido</option>
+                    </select>
+                </div>
+
+                <!-- NR-12 -->
+                <div class="course-filter-group">
+                    <div class="course-header">
+                        <label class="course-label">NR-12</label>
+                        <div class="course-indicators">
+                            <span class="indicator-label qda-vencido">Qda:</span>
+                            <span class="indicator-count qda-vencido" id="nr12-vencido">0</span>
+                            <span class="indicator-label qda-renovar">Qda:</span>
+                            <span class="indicator-count qda-renovar" id="nr12-renovar">0</span>
+                        </div>
+                    </div>
+                    <select id="filter-nr12" class="course-select" onchange="syscontrole.aplicarFiltrosCursos()">
+                        <option value="">Todos</option>
+                        <option value="ok">OK</option>
+                        <option value="renovar">Renovar</option>
+                        <option value="vencido">Vencido</option>
+                    </select>
+                </div>
+
+                <!-- NR-17 -->
+                <div class="course-filter-group">
+                    <div class="course-header">
+                        <label class="course-label">NR-17</label>
+                        <div class="course-indicators">
+                            <span class="indicator-label qda-vencido">Qda:</span>
+                            <span class="indicator-count qda-vencido" id="nr17-vencido">0</span>
+                            <span class="indicator-label qda-renovar">Qda:</span>
+                            <span class="indicator-count qda-renovar" id="nr17-renovar">0</span>
+                        </div>
+                    </div>
+                    <select id="filter-nr17" class="course-select" onchange="syscontrole.aplicarFiltrosCursos()">
+                        <option value="">Todos</option>
+                        <option value="ok">OK</option>
+                        <option value="renovar">Renovar</option>
+                        <option value="vencido">Vencido</option>
+                    </select>
+                </div>
+
+                <!-- NR-18 -->
+                <div class="course-filter-group">
+                    <div class="course-header">
+                        <label class="course-label">NR-18</label>
+                        <div class="course-indicators">
+                            <span class="indicator-label qda-vencido">Qda:</span>
+                            <span class="indicator-count qda-vencido" id="nr18-vencido">0</span>
+                            <span class="indicator-label qda-renovar">Qda:</span>
+                            <span class="indicator-count qda-renovar" id="nr18-renovar">0</span>
+                        </div>
+                    </div>
+                    <select id="filter-nr18" class="course-select" onchange="syscontrole.aplicarFiltrosCursos()">
+                        <option value="">Todos</option>
+                        <option value="ok">OK</option>
+                        <option value="renovar">Renovar</option>
+                        <option value="vencido">Vencido</option>
+                    </select>
+                </div>
+
+                <!-- NR-20 -->
+                <div class="course-filter-group">
+                    <div class="course-header">
+                        <label class="course-label">NR-20</label>
+                        <div class="course-indicators">
+                            <span class="indicator-label qda-vencido">Qda:</span>
+                            <span class="indicator-count qda-vencido" id="nr20-vencido">0</span>
+                            <span class="indicator-label qda-renovar">Qda:</span>
+                            <span class="indicator-count qda-renovar" id="nr20-renovar">0</span>
+                        </div>
+                    </div>
+                    <select id="filter-nr20" class="course-select" onchange="syscontrole.aplicarFiltrosCursos()">
+                        <option value="">Todos</option>
+                        <option value="ok">OK</option>
+                        <option value="renovar">Renovar</option>
+                        <option value="vencido">Vencido</option>
+                    </select>
+                </div>
+
+                <!-- NR-33 -->
+                <div class="course-filter-group">
+                    <div class="course-header">
+                        <label class="course-label">NR-33</label>
+                        <div class="course-indicators">
+                            <span class="indicator-label qda-vencido">Qda:</span>
+                            <span class="indicator-count qda-vencido" id="nr33-vencido">0</span>
+                            <span class="indicator-label qda-renovar">Qda:</span>
+                            <span class="indicator-count qda-renovar" id="nr33-renovar">0</span>
+                        </div>
+                    </div>
+                    <select id="filter-nr33" class="course-select" onchange="syscontrole.aplicarFiltrosCursos()">
+                        <option value="">Todos</option>
+                        <option value="ok">OK</option>
+                        <option value="renovar">Renovar</option>
+                        <option value="vencido">Vencido</option>
+                    </select>
+                </div>
+
+                <!-- NR-34 -->
+                <div class="course-filter-group">
+                    <div class="course-header">
+                        <label class="course-label">NR-34</label>
+                        <div class="course-indicators">
+                            <span class="indicator-label qda-vencido">Qda:</span>
+                            <span class="indicator-count qda-vencido" id="nr34-vencido">0</span>
+                            <span class="indicator-label qda-renovar">Qda:</span>
+                            <span class="indicator-count qda-renovar" id="nr34-renovar">0</span>
+                        </div>
+                    </div>
+                    <select id="filter-nr34" class="course-select" onchange="syscontrole.aplicarFiltrosCursos()">
+                        <option value="">Todos</option>
+                        <option value="ok">OK</option>
+                        <option value="renovar">Renovar</option>
+                        <option value="vencido">Vencido</option>
+                    </select>
+                </div>
+
+                <!-- NR-35 -->
+                <div class="course-filter-group">
+                    <div class="course-header">
+                        <label class="course-label">NR-35</label>
+                        <div class="course-indicators">
+                            <span class="indicator-label qda-vencido">Qda:</span>
+                            <span class="indicator-count qda-vencido" id="nr35-vencido">0</span>
+                            <span class="indicator-label qda-renovar">Qda:</span>
+                            <span class="indicator-count qda-renovar" id="nr35-renovar">0</span>
+                        </div>
+                    </div>
+                    <select id="filter-nr35" class="course-select" onchange="syscontrole.aplicarFiltrosCursos()">
+                        <option value="">Todos</option>
+                        <option value="ok">OK</option>
+                        <option value="renovar">Renovar</option>
+                        <option value="vencido">Vencido</option>
+                    </select>
+                </div>
+
+                <!-- EPI -->
+                <div class="course-filter-group">
+                    <div class="course-header">
+                        <label class="course-label">EPI</label>
+                        <div class="course-indicators">
+                            <span class="indicator-label qda-vencido">Qda:</span>
+                            <span class="indicator-count qda-vencido" id="epi-vencido">0</span>
+                            <span class="indicator-label qda-renovar">Qda:</span>
+                            <span class="indicator-count qda-renovar" id="epi-renovar">0</span>
+                        </div>
+                    </div>
+                    <select id="filter-epi" class="course-select" onchange="syscontrole.aplicarFiltrosCursos()">
+                        <option value="">Todos</option>
+                        <option value="ok">OK</option>
+                        <option value="renovar">Renovar</option>
+                        <option value="vencido">Vencido</option>
+                    </select>
+                </div>
+            </div>
+
+            <!-- Rodapé com paginação e contadores em uma linha -->
+            <div class="footer-bottom-row">
+                <!-- Paginação à esquerda -->
+                <div class="pagination-controls">
+                    <button id="btnFirst" class="page-btn btn-first">⏮️</button>
+                    <button id="btnPrev" class="page-btn btn-prev">◀️</button>
+                    <input type="text" class="page-info" id="pageInput" value="Pág 1/1" readonly>
+                    <button id="btnNext" class="page-btn btn-next">▶️</button>
+                    <button id="btnLast" class="page-btn btn-last">⏭️</button>
+                </div>
+
+                <!-- Contadores no meio -->
+                <div class="footer-counters">
+                    <span class="counter-item record-count">👤 0 Localizados</span>
+                    <span class="counter-item active-count">0 Ativo</span>
+                    <span class="counter-item canceled-count">0 Cancelado</span>
+                </div>
+
+                <!-- Indicadores visuais (bolinhas coloridas) à direita -->
+                <div class="visual-indicators">
+                    <span id="usuarioLogado" style="font-size: 11px; color: #999; margin-right: 15px;"></span>
+                    <div class="indicator-circle ok"></div>
+                    <div class="indicator-circle renovar"></div>
+                    <div class="indicator-circle vencido"></div>
+                    <div class="indicator-circle cancelado"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Modal para Novo/Editar - Com abas igual ao desktop -->
+    <div id="modalForm" class="modal">
+        <div class="modal-content form-modal">
+            <div class="modal-header">
+                <h2 id="modalTitle">FrmPrincipal</h2>
+                <span class="modal-close">&times;</span>
+            </div>
+            
+            <!-- Abas do formulário -->
+            <div class="form-tabs">
+                <button type="button" class="tab-btn active" data-tab="cursos">Cursos</button>
+                <button type="button" class="tab-btn" data-tab="fornecedor">Fornecedor</button>
+                <button type="button" class="tab-btn" data-tab="documentacao">Documentação</button>
+            </div>
+            
+            <!-- Abas das NRs -->
+            <div class="nr-tabs">
+                <button type="button" class="nr-tab active" data-nr="aso">ASO</button>
+                <button type="button" class="nr-tab" data-nr="nr06">NR-06</button>
+                <button type="button" class="nr-tab" data-nr="nr10">NR-10</button>
+                <button type="button" class="nr-tab" data-nr="nr11">NR-11</button>
+                <button type="button" class="nr-tab" data-nr="nr12">NR-12</button>
+                <button type="button" class="nr-tab" data-nr="nr17">NR-17</button>
+                <button type="button" class="nr-tab" data-nr="nr18">NR-18</button>
+                <button type="button" class="nr-tab" data-nr="nr20">NR-20</button>
+                <button type="button" class="nr-tab" data-nr="nr33">NR-33</button>
+                <button type="button" class="nr-tab" data-nr="nr34">NR-34</button>
+                <button type="button" class="nr-tab" data-nr="nr35">NR-35</button>
+                <button type="button" class="nr-tab" data-nr="epi">EPI</button>
+            </div>
+            
+            <form id="formSSMA" enctype="multipart/form-data">
+                <input type="hidden" id="registroId" name="id">
+                
+                <!-- Campos ocultos para manter dados entre abas -->
+                <input type="hidden" id="hiddenNome" name="nome">
+                <input type="hidden" id="hiddenEmpresa" name="empresa">
+                <input type="hidden" id="hiddenFuncao" name="funcao">
+                <input type="hidden" id="hiddenSituacao" name="situacao">
+                <input type="hidden" id="hiddenAnotacoes" name="anotacoes">
+                
+                <div class="form-content">
+                    <!-- Área principal do formulário -->
+                    <div class="form-main">
+                        <!-- Seção ASO (ativa por padrão) -->
+                        <div class="nr-content active" id="content-aso">
+                            <div class="aso-layout">
+                                <!-- Logo ASO -->
+                                <div class="aso-logo-area">
+                                    <div class="aso-icon">ASO</div>
+                                    <div class="logo-id" id="logoId" style="font-size: 11px; color: #999; text-align: center; margin-top: 4px;">ID: -</div>
+                                </div>
+                                
+                                <!-- Área principal do formulário -->
+                                <div class="aso-form-area">
+                                    <!-- Campos principais (Nome, Empresa, Função) -->
+                                    <div class="main-fields-row">
+                                        <div class="field-group">
+                                            <label>Nome</label>
+                                            <input type="text" id="nome" name="nome" class="field-dropdown" placeholder="Digite o nome" onkeydown="syscontrole.navegarFormulario(event, 'nome', 'empresa')" oninput="syscontrole.capitalizarNome(this)">
+                                        </div>
+                                        
+                                        <div class="field-group">
+                                            <label>Empresa</label>
+                                            <input type="text" id="empresa" name="empresa" class="field-dropdown" onkeydown="syscontrole.navegarFormulario(event, 'empresa', 'funcao')" oninput="syscontrole.capitalizarNome(this)" placeholder="Digite a empresa" autocomplete="off" list="empresasList">
+                                            <datalist id="empresasList"></datalist>
+                                        </div>
+                                        
+                                        <div class="field-group">
+                                            <label>Função</label>
+                                            <input type="text" id="funcao" name="funcao" class="field-dropdown" onkeydown="syscontrole.navegarFormulario(event, 'funcao', 'dataEmissao')" oninput="syscontrole.capitalizarNome(this)" placeholder="Digite a função">
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Linha de datas (Data Emissão até Ambientação) -->
+                                    <div class="dates-row">
+                                        <div class="field-group">
+                                            <label>Data Emissão</label>
+                                            <input type="text" id="dataEmissao" name="dataEmissao" placeholder="dd/mm/aaaa" maxlength="10" onkeydown="syscontrole.navegarFormulario(event, 'dataEmissao', 'btnImagem')">
+                                        </div>
+                                        
+                                        <div class="field-group">
+                                            <label>Vencimento</label>
+                                            <input type="date" id="vencimento" name="vencimento">
+                                        </div>
+                                        
+                                        <div class="field-group">
+                                            <label>Dias Corridos</label>
+                                            <input type="text" id="diasCorridos" name="diasCorridos" readonly>
+                                        </div>
+                                        
+                                        <div class="field-group">
+                                            <label>Dias a Vencer</label>
+                                            <input type="text" id="diasVencer" name="diasVencer" readonly>
+                                        </div>
+                                        
+                                        <div class="field-group">
+                                            <label>Ambientação</label>
+                                            <div class="radio-group">
+                                                <input type="radio" id="ambSim" name="ambientacao" value="S">
+                                                <label for="ambSim">Sim</label>
+                                                <input type="radio" id="ambNao" name="ambientacao" value="N">
+                                                <label for="ambNao">Não</label>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Linha inferior: ID + Status + Gênero + Anotações + Ativo -->
+                                    <div class="bottom-row">
+                                        <div class="left-small-fields">
+                                            <div class="field-group small" style="display: none;">
+                                                <label>ID</label>
+                                                <input type="text" id="idField" name="idField" readonly>
+                                            </div>
+                                            
+                                            <div class="field-group small">
+                                                <label>Status</label>
+                                                <select id="status" class="status-select">
+                                                    <option value=""></option>
+                                                    <option value="OK">OK</option>
+                                                    <option value="Renovar">Renovar</option>
+                                                    <option value="Vencido">Vencido</option>
+                                                </select>
+                                            </div>
+                                            
+                                            <div class="field-group small">
+                                                <label>Gênero</label>
+                                                <select id="genero" onkeydown="syscontrole.navegarFormulario(event, 'genero', 'btnImagem')">
+                                                    <option value=""></option>
+                                                    <option value="M">Masculino</option>
+                                                    <option value="F">Feminino</option>
+                                                </select>
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="annotations-area">
+                                            <div class="annotations-row">
+                                                <label>Anotações</label>
+                                                <div class="dates-status-row">
+                                                    <input type="text" id="dataCadastro" name="dataCadastro" value="09/12/2025" readonly class="date-field">
+                                                    <input type="text" id="dataInativacao" name="dataInativacao" class="date-field">
+                                                    <button type="button" id="btnStatus" class="btn-status cancelado" onclick="syscontrole.toggleStatus()">
+                                                        <span class="status-icon">●</span>
+                                                        <span class="status-text">Cancelado</span>
+                                                    </button>
+                                                </div>
+                                            </div>
+                                            <textarea id="anotacoes" name="anotacoes" placeholder="Anotações..." spellcheck="true" lang="pt-BR" onkeydown="syscontrole.navegarFormulario(event, 'anotacoes', '')"></textarea>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Botões -->
+                                    <div class="buttons-row">
+                                        <button type="button" class="btn-form btn-novo" tabindex="-1">Novo</button>
+                                        <button type="submit" id="btnSalvar" class="btn-form btn-cadastrar" tabindex="-1">Cadastrar</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Aba NR-06 -->
+                        <div class="nr-content" id="content-nr06">
+                            <div class="nr06-layout">
+                                <!-- Logo NR-06 -->
+                                <div class="nr06-logo-area">
+                                    <div class="nr06-icon">NR<br>06</div>
+                                    <div class="logo-id" id="logoIdNr06" style="font-size: 11px; color: #999; text-align: center; margin-top: 4px;">ID: -</div>
+                                </div>
+                                
+                                <!-- Área principal do formulário NR-06 -->
+                                <div class="nr06-form-area">
+                                    <!-- Campos principais (Nome, Empresa, Função) - READONLY -->
+                                    <div class="main-fields-row readonly-fields">
+                                        <div class="field-group">
+                                            <label>Nome</label>
+                                            <input type="text" id="nr06_nome" name="nr06_nome" readonly class="readonly-field">
+                                        </div>
+                                        
+                                        <div class="field-group">
+                                            <label>Empresa</label>
+                                            <input type="text" id="nr06_empresa" name="nr06_empresa" readonly class="readonly-field">
+                                        </div>
+                                        
+                                        <div class="field-group">
+                                            <label>Função</label>
+                                            <input type="text" id="nr06_funcao" name="nr06_funcao" readonly class="readonly-field">
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Linha de datas NR-06 -->
+                                    <div class="dates-row">
+                                        <div class="field-group">
+                                            <label>Data Emissão</label>
+                                            <input type="text" id="nr06_dataEmissao" placeholder="dd/mm/aaaa" maxlength="10" class="date-input-br nr06-focus" onkeydown="syscontrole.navegarFormulario(event, 'nr06_dataEmissao', 'nr10_dataEmissao')">
+                                        </div>
+                                        
+                                        <div class="field-group">
+                                            <label>Vencimento</label>
+                                            <input type="date" id="nr06_vencimento" name="nr06_vencimento" readonly class="calc-field">
+                                        </div>
+                                        
+                                        <div class="field-group">
+                                            <label>Dias Corridos</label>
+                                            <input type="text" id="nr06_diasCorridos" name="nr06_diasCorridos" readonly class="calc-field">
+                                        </div>
+                                        
+                                        <div class="field-group">
+                                            <label>Dias a Vencer</label>
+                                            <input type="text" id="nr06_diasVencer" name="nr06_diasVencer" readonly class="calc-field">
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Status -->
+                                    <div class="status-row">
+                                        <div class="field-group small">
+                                            <label>Status</label>
+                                            <select id="nr06_status" name="nr06_status" class="status-select" readonly>
+                                                <option value=""></option>
+                                                <option value="OK">OK</option>
+                                                <option value="Renovar">Renovar</option>
+                                                <option value="Vencido">Vencido</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Botões -->
+                                    <div class="buttons-row">
+                                        <button type="button" class="btn-form btn-novo">Novo</button>
+                                        <button type="submit" id="btnSalvarNr06" class="btn-form btn-cadastrar">Cadastrar</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Aba NR-10 -->
+                        <div class="nr-content" id="content-nr10">
+                            <div class="nr10-layout">
+                                <!-- Logo NR-10 -->
+                                <div class="nr10-logo-area">
+                                    <div class="nr10-icon">NR<br>10</div>
+                                    <div class="logo-id" id="logoIdNr10" style="font-size: 11px; color: #999; text-align: center; margin-top: 4px;">ID: -</div>
+                                </div>
+                                
+                                <!-- Área principal do formulário NR-10 -->
+                                <div class="nr10-form-area">
+                                    <!-- Campos principais (Nome, Empresa, Função) - READONLY -->
+                                    <div class="main-fields-row readonly-fields">
+                                        <div class="field-group">
+                                            <label>Nome</label>
+                                            <input type="text" id="nr10_nome" name="nr10_nome" readonly class="readonly-field">
+                                        </div>
+                                        
+                                        <div class="field-group">
+                                            <label>Empresa</label>
+                                            <input type="text" id="nr10_empresa" name="nr10_empresa" readonly class="readonly-field">
+                                        </div>
+                                        
+                                        <div class="field-group">
+                                            <label>Função</label>
+                                            <input type="text" id="nr10_funcao" name="nr10_funcao" readonly class="readonly-field">
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Linha de datas NR-10 -->
+                                    <div class="dates-row">
+                                        <div class="field-group">
+                                            <label>Data Emissão</label>
+                                            <input type="text" id="nr10_dataEmissao" name="nr10_dataEmissao" placeholder="dd/mm/aaaa" maxlength="10" class="date-input-br nr10-focus" onkeydown="syscontrole.navegarFormulario(event, 'nr10_dataEmissao', 'nr11_dataEmissao')">
+                                        </div>
+                                        
+                                        <div class="field-group">
+                                            <label>Vencimento</label>
+                                            <input type="date" id="nr10_vencimento" name="nr10_vencimento" readonly class="calc-field">
+                                        </div>
+                                        
+                                        <div class="field-group">
+                                            <label>Dias Corridos</label>
+                                            <input type="text" id="nr10_diasCorridos" name="nr10_diasCorridos" readonly class="calc-field">
+                                        </div>
+                                        
+                                        <div class="field-group">
+                                            <label>Dias a Vencer</label>
+                                            <input type="text" id="nr10_diasVencer" name="nr10_diasVencer" readonly class="calc-field">
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Status -->
+                                    <div class="status-row">
+                                        <div class="field-group small">
+                                            <label>Status</label>
+                                            <select id="nr10_status" name="nr10_status" class="status-select" readonly>
+                                                <option value=""></option>
+                                                <option value="OK">OK</option>
+                                                <option value="Renovar">Renovar</option>
+                                                <option value="Vencido">Vencido</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Botões -->
+                                    <div class="buttons-row">
+                                        <button type="button" class="btn-form btn-novo">Novo</button>
+                                        <button type="submit" id="btnSalvarNr10" class="btn-form btn-cadastrar">Cadastrar</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Aba NR-11 -->
+                        <div class="nr-content" id="content-nr11">
+                            <div class="nr11-layout">
+                                <!-- Logo NR-11 -->
+                                <div class="nr11-logo-area">
+                                    <div class="nr11-icon">NR<br>11</div>
+                                    <div class="logo-id" id="logoIdNr11" style="font-size: 11px; color: #999; text-align: center; margin-top: 4px;">ID: -</div>
+                                </div>
+                                
+                                <!-- Área principal do formulário NR-11 -->
+                                <div class="nr11-form-area">
+                                    <!-- Campos principais (Nome, Empresa, Função) - READONLY -->
+                                    <div class="main-fields-row readonly-fields">
+                                        <div class="field-group">
+                                            <label>Nome</label>
+                                            <input type="text" id="nr11_nome" name="nr11_nome" readonly class="readonly-field">
+                                        </div>
+                                        
+                                        <div class="field-group">
+                                            <label>Empresa</label>
+                                            <input type="text" id="nr11_empresa" name="nr11_empresa" readonly class="readonly-field">
+                                        </div>
+                                        
+                                        <div class="field-group">
+                                            <label>Função</label>
+                                            <input type="text" id="nr11_funcao" name="nr11_funcao" readonly class="readonly-field">
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Linha de datas NR-11 -->
+                                    <div class="dates-row">
+                                        <div class="field-group">
+                                            <label>Data Emissão</label>
+                                            <input type="text" id="nr11_dataEmissao" placeholder="dd/mm/aaaa" maxlength="10" class="date-input-br nr11-focus" onkeydown="syscontrole.navegarFormulario(event, 'nr11_dataEmissao', 'nr12_dataEmissao')">
+                                        </div>
+                                        
+                                        <div class="field-group">
+                                            <label>Vencimento</label>
+                                            <input type="date" id="nr11_vencimento" name="nr11_vencimento" readonly class="calc-field">
+                                        </div>
+                                        
+                                        <div class="field-group">
+                                            <label>Dias Corridos</label>
+                                            <input type="text" id="nr11_diasCorridos" name="nr11_diasCorridos" readonly class="calc-field">
+                                        </div>
+                                        
+                                        <div class="field-group">
+                                            <label>Dias a Vencer</label>
+                                            <input type="text" id="nr11_diasVencer" name="nr11_diasVencer" readonly class="calc-field">
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Status -->
+                                    <div class="status-row">
+                                        <div class="field-group small">
+                                            <label>Status</label>
+                                            <select id="nr11_status" name="nr11_status" class="status-select" readonly>
+                                                <option value=""></option>
+                                                <option value="OK">OK</option>
+                                                <option value="Renovar">Renovar</option>
+                                                <option value="Vencido">Vencido</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Botões -->
+                                    <div class="buttons-row">
+                                        <button type="button" class="btn-form btn-novo">Novo</button>
+                                        <button type="submit" id="btnSalvarNr11" class="btn-form btn-cadastrar">Cadastrar</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Aba NR-12 -->
+                        <div class="nr-content" id="content-nr12">
+                            <div class="nr12-layout">
+                                <!-- Logo NR-12 -->
+                                <div class="nr12-logo-area">
+                                    <div class="nr12-icon">NR<br>12</div>
+                                    <div class="logo-id" id="logoIdNr12" style="font-size: 11px; color: #999; text-align: center; margin-top: 4px;">ID: -</div>
+                                </div>
+                                
+                                <!-- Área principal do formulário NR-12 -->
+                                <div class="nr12-form-area">
+                                    <!-- Campos principais (Nome, Empresa, Função) - READONLY -->
+                                    <div class="main-fields-row readonly-fields">
+                                        <div class="field-group">
+                                            <label>Nome</label>
+                                            <input type="text" id="nr12_nome" name="nr12_nome" readonly class="readonly-field">
+                                        </div>
+                                        
+                                        <div class="field-group">
+                                            <label>Empresa</label>
+                                            <input type="text" id="nr12_empresa" name="nr12_empresa" readonly class="readonly-field">
+                                        </div>
+                                        
+                                        <div class="field-group">
+                                            <label>Função</label>
+                                            <input type="text" id="nr12_funcao" name="nr12_funcao" readonly class="readonly-field">
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Linha de datas NR-12 -->
+                                    <div class="dates-row">
+                                        <div class="field-group">
+                                            <label>Data Emissão</label>
+                                            <input type="text" id="nr12_dataEmissao" placeholder="dd/mm/aaaa" maxlength="10" class="date-input-br nr12-focus" onkeydown="syscontrole.navegarFormulario(event, 'nr12_dataEmissao', 'nr12_ferramenta')">
+                                        </div>
+                                        
+                                        <div class="field-group">
+                                            <label>Vencimento</label>
+                                            <input type="date" id="nr12_vencimento" name="nr12_vencimento" readonly class="calc-field">
+                                        </div>
+                                        
+                                        <div class="field-group">
+                                            <label>Dias Corridos</label>
+                                            <input type="text" id="nr12_diasCorridos" name="nr12_diasCorridos" readonly class="calc-field">
+                                        </div>
+                                        
+                                        <div class="field-group">
+                                            <label>Dias a Vencer</label>
+                                            <input type="text" id="nr12_diasVencer" name="nr12_diasVencer" readonly class="calc-field">
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Status e Ferramenta -->
+                                    <div class="status-row">
+                                        <div class="field-group small">
+                                            <label>Status</label>
+                                            <select id="nr12_status" name="nr12_status" class="status-select" readonly>
+                                                <option value=""></option>
+                                                <option value="OK">OK</option>
+                                                <option value="Renovar">Renovar</option>
+                                                <option value="Vencido">Vencido</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Campo Ferramenta (específico da NR-12) -->
+                                    <div class="ferramenta-section">
+                                        <label>Ferramenta</label>
+                                        <textarea id="nr12_ferramenta" placeholder="Descreva as ferramentas e serviços habilitados..." rows="4" spellcheck="true" lang="pt-BR" onkeydown="syscontrole.navegarFormulario(event, 'nr12_ferramenta', '')"></textarea>
+                                    </div>
+                                    
+                                    <!-- Botões -->
+                                    <div class="buttons-row">
+                                        <button type="button" class="btn-form btn-novo">Novo</button>
+                                        <button type="submit" id="btnSalvarNr12" class="btn-form btn-cadastrar">Cadastrar</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Aba NR-17 -->
+                        <div class="nr-content" id="content-nr17">
+                            <div class="nr17-layout">
+                                <!-- Logo NR-17 -->
+                                <div class="nr17-logo-area">
+                                    <div class="nr17-icon">NR<br>17</div>
+                                    <div class="logo-id" id="logoIdNr17" style="font-size: 11px; color: #999; text-align: center; margin-top: 4px;">ID: -</div>
+                                </div>
+                                
+                                <!-- Área principal do formulário NR-17 -->
+                                <div class="nr17-form-area">
+                                    <!-- Campos principais (Nome, Empresa, Função) - READONLY -->
+                                    <div class="main-fields-row readonly-fields">
+                                        <div class="field-group">
+                                            <label>Nome</label>
+                                            <input type="text" id="nr17_nome" name="nr17_nome" readonly class="readonly-field">
+                                        </div>
+                                        
+                                        <div class="field-group">
+                                            <label>Empresa</label>
+                                            <input type="text" id="nr17_empresa" name="nr17_empresa" readonly class="readonly-field">
+                                        </div>
+                                        
+                                        <div class="field-group">
+                                            <label>Função</label>
+                                            <input type="text" id="nr17_funcao" name="nr17_funcao" readonly class="readonly-field">
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Linha de datas NR-17 -->
+                                    <div class="dates-row">
+                                        <div class="field-group">
+                                            <label>Data Emissão</label>
+                                            <input type="text" id="nr17_dataEmissao" placeholder="dd/mm/aaaa" maxlength="10" class="date-input-br nr17-focus" onkeydown="syscontrole.navegarFormulario(event, 'nr17_dataEmissao', 'nr18_dataEmissao')">
+                                        </div>
+                                        
+                                        <div class="field-group">
+                                            <label>Vencimento</label>
+                                            <input type="date" id="nr17_vencimento" name="nr17_vencimento" readonly class="calc-field">
+                                        </div>
+                                        
+                                        <div class="field-group">
+                                            <label>Dias Corridos</label>
+                                            <input type="text" id="nr17_diasCorridos" name="nr17_diasCorridos" readonly class="calc-field">
+                                        </div>
+                                        
+                                        <div class="field-group">
+                                            <label>Dias a Vencer</label>
+                                            <input type="text" id="nr17_diasVencer" name="nr17_diasVencer" readonly class="calc-field">
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Status -->
+                                    <div class="status-row">
+                                        <div class="field-group small">
+                                            <label>Status</label>
+                                            <select id="nr17_status" name="nr17_status" class="status-select" readonly>
+                                                <option value=""></option>
+                                                <option value="OK">OK</option>
+                                                <option value="Renovar">Renovar</option>
+                                                <option value="Vencido">Vencido</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Botões -->
+                                    <div class="buttons-row">
+                                        <button type="button" class="btn-form btn-novo">Novo</button>
+                                        <button type="submit" id="btnSalvarNr17" class="btn-form btn-cadastrar">Cadastrar</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Aba NR-18 -->
+                        <div class="nr-content" id="content-nr18">
+                            <div class="nr18-layout">
+                                <!-- Logo NR-18 -->
+                                <div class="nr18-logo-area">
+                                    <div class="nr18-icon">NR<br>18</div>
+                                    <div class="logo-id" id="logoIdNr18" style="font-size: 11px; color: #999; text-align: center; margin-top: 4px;">ID: -</div>
+                                </div>
+                                
+                                <!-- Área principal do formulário NR-18 -->
+                                <div class="nr18-form-area">
+                                    <!-- Campos principais (Nome, Empresa, Função) - READONLY -->
+                                    <div class="main-fields-row readonly-fields">
+                                        <div class="field-group">
+                                            <label>Nome</label>
+                                            <input type="text" id="nr18_nome" name="nr18_nome" readonly class="readonly-field">
+                                        </div>
+                                        
+                                        <div class="field-group">
+                                            <label>Empresa</label>
+                                            <input type="text" id="nr18_empresa" name="nr18_empresa" readonly class="readonly-field">
+                                        </div>
+                                        
+                                        <div class="field-group">
+                                            <label>Função</label>
+                                            <input type="text" id="nr18_funcao" name="nr18_funcao" readonly class="readonly-field">
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Linha de datas NR-18 -->
+                                    <div class="dates-row">
+                                        <div class="field-group">
+                                            <label>Data Emissão</label>
+                                            <input type="text" id="nr18_dataEmissao" placeholder="dd/mm/aaaa" maxlength="10" class="date-input-br nr18-focus" onkeydown="syscontrole.navegarFormulario(event, 'nr18_dataEmissao', 'nr33_dataEmissao')">
+                                        </div>
+                                        
+                                        <div class="field-group">
+                                            <label>Vencimento</label>
+                                            <input type="date" id="nr18_vencimento" name="nr18_vencimento" readonly class="calc-field">
+                                        </div>
+                                        
+                                        <div class="field-group">
+                                            <label>Dias Corridos</label>
+                                            <input type="text" id="nr18_diasCorridos" name="nr18_diasCorridos" readonly class="calc-field">
+                                        </div>
+                                        
+                                        <div class="field-group">
+                                            <label>Dias a Vencer</label>
+                                            <input type="text" id="nr18_diasVencer" name="nr18_diasVencer" readonly class="calc-field">
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Status -->
+                                    <div class="status-row">
+                                        <div class="field-group small">
+                                            <label>Status</label>
+                                            <select id="nr18_status" name="nr18_status" class="status-select" readonly>
+                                                <option value=""></option>
+                                                <option value="OK">OK</option>
+                                                <option value="Renovar">Renovar</option>
+                                                <option value="Vencido">Vencido</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Botões -->
+                                    <div class="buttons-row">
+                                        <button type="button" class="btn-form btn-novo">Novo</button>
+                                        <button type="submit" id="btnSalvarNr18" class="btn-form btn-cadastrar">Cadastrar</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Aba NR-20 -->
+                        <div class="nr-content" id="content-nr20">
+                            <div class="nr20-layout">
+                                <!-- Logo NR-20 -->
+                                <div class="nr20-logo-area">
+                                    <div class="nr20-icon">NR<br>20</div>
+                                    <div class="logo-id" id="logoIdNr20" style="font-size: 11px; color: #999; text-align: center; margin-top: 4px;">ID: -</div>
+                                </div>
+                                
+                                <!-- Área principal do formulário NR-20 -->
+                                <div class="nr20-form-area">
+                                    <!-- Campos principais (Nome, Empresa, Função) - READONLY -->
+                                    <div class="main-fields-row readonly-fields">
+                                        <div class="field-group">
+                                            <label>Nome</label>
+                                            <input type="text" id="nr20_nome" name="nr20_nome" readonly class="readonly-field">
+                                        </div>
+                                        
+                                        <div class="field-group">
+                                            <label>Empresa</label>
+                                            <input type="text" id="nr20_empresa" name="nr20_empresa" readonly class="readonly-field">
+                                        </div>
+                                        
+                                        <div class="field-group">
+                                            <label>Função</label>
+                                            <input type="text" id="nr20_funcao" name="nr20_funcao" readonly class="readonly-field">
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Linha de datas NR-20 -->
+                                    <div class="dates-row">
+                                        <div class="field-group">
+                                            <label>Data Emissão</label>
+                                            <input type="text" id="nr20_dataEmissao" placeholder="dd/mm/aaaa" maxlength="10" class="date-input-br nr20-focus" onkeydown="syscontrole.navegarFormulario(event, 'nr20_dataEmissao', 'nr33_dataEmissao')">
+                                        </div>
+                                        
+                                        <div class="field-group">
+                                            <label>Vencimento</label>
+                                            <input type="date" id="nr20_vencimento" name="nr20_vencimento" readonly class="calc-field">
+                                        </div>
+                                        
+                                        <div class="field-group">
+                                            <label>Dias Corridos</label>
+                                            <input type="text" id="nr20_diasCorridos" name="nr20_diasCorridos" readonly class="calc-field">
+                                        </div>
+                                        
+                                        <div class="field-group">
+                                            <label>Dias a Vencer</label>
+                                            <input type="text" id="nr20_diasVencer" name="nr20_diasVencer" readonly class="calc-field">
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Status -->
+                                    <div class="status-row">
+                                        <div class="field-group small">
+                                            <label>Status</label>
+                                            <select id="nr20_status" name="nr20_status" class="status-select" readonly>
+                                                <option value=""></option>
+                                                <option value="OK">OK</option>
+                                                <option value="Renovar">Renovar</option>
+                                                <option value="Vencido">Vencido</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Botões -->
+                                    <div class="buttons-row">
+                                        <button type="button" class="btn-form btn-novo">Novo</button>
+                                        <button type="submit" id="btnSalvarNr20" class="btn-form btn-cadastrar">Cadastrar</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Aba NR-33 -->
+                        <div class="nr-content" id="content-nr33">
+                            <div class="nr33-layout">
+                                <!-- Logo NR-33 -->
+                                <div class="nr33-logo-area">
+                                    <div class="nr33-icon">NR<br>33</div>
+                                    <div class="logo-id" id="logoIdNr33" style="font-size: 11px; color: #999; text-align: center; margin-top: 4px;">ID: -</div>
+                                </div>
+                                
+                                <!-- Área principal do formulário NR-33 -->
+                                <div class="nr33-form-area">
+                                    <!-- Campos principais (Nome, Empresa, Função) - READONLY -->
+                                    <div class="main-fields-row readonly-fields">
+                                        <div class="field-group">
+                                            <label>Nome</label>
+                                            <input type="text" id="nr33_nome" name="nr33_nome" readonly class="readonly-field">
+                                        </div>
+                                        
+                                        <div class="field-group">
+                                            <label>Empresa</label>
+                                            <input type="text" id="nr33_empresa" name="nr33_empresa" readonly class="readonly-field">
+                                        </div>
+                                        
+                                        <div class="field-group">
+                                            <label>Função</label>
+                                            <input type="text" id="nr33_funcao" name="nr33_funcao" readonly class="readonly-field">
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Linha de datas NR-33 -->
+                                    <div class="dates-row">
+                                        <div class="field-group">
+                                            <label>Data Emissão</label>
+                                            <input type="text" id="nr33_dataEmissao" placeholder="dd/mm/aaaa" maxlength="10" class="date-input-br nr33-focus" onkeydown="syscontrole.navegarFormulario(event, 'nr33_dataEmissao', 'nr35_dataEmissao')">
+                                        </div>
+                                        
+                                        <div class="field-group">
+                                            <label>Vencimento</label>
+                                            <input type="date" id="nr33_vencimento" name="nr33_vencimento" readonly class="calc-field">
+                                        </div>
+                                        
+                                        <div class="field-group">
+                                            <label>Dias Corridos</label>
+                                            <input type="text" id="nr33_diasCorridos" name="nr33_diasCorridos" readonly class="calc-field">
+                                        </div>
+                                        
+                                        <div class="field-group">
+                                            <label>Dias a Vencer</label>
+                                            <input type="text" id="nr33_diasVencer" name="nr33_diasVencer" readonly class="calc-field">
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Status -->
+                                    <div class="status-row">
+                                        <div class="field-group small">
+                                            <label>Status</label>
+                                            <select id="nr33_status" name="nr33_status" class="status-select" readonly>
+                                                <option value=""></option>
+                                                <option value="OK">OK</option>
+                                                <option value="Renovar">Renovar</option>
+                                                <option value="Vencido">Vencido</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Botões -->
+                                    <div class="buttons-row">
+                                        <button type="button" class="btn-form btn-novo">Novo</button>
+                                        <button type="submit" id="btnSalvarNr33" class="btn-form btn-cadastrar">Cadastrar</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Aba NR-34 -->
+                        <div class="nr-content" id="content-nr34">
+                            <div class="nr34-layout">
+                                <!-- Logo NR-34 -->
+                                <div class="nr34-logo-area">
+                                    <div class="nr34-icon">NR<br>34</div>
+                                    <div class="logo-id" id="logoIdNr34" style="font-size: 11px; color: #999; text-align: center; margin-top: 4px;">ID: -</div>
+                                </div>
+                                
+                                <!-- Área principal do formulário NR-34 -->
+                                <div class="nr34-form-area">
+                                    <!-- Campos principais (Nome, Empresa, Função) - READONLY -->
+                                    <div class="main-fields-row readonly-fields">
+                                        <div class="field-group">
+                                            <label>Nome</label>
+                                            <input type="text" id="nr34_nome" name="nr34_nome" readonly class="readonly-field">
+                                        </div>
+                                        
+                                        <div class="field-group">
+                                            <label>Empresa</label>
+                                            <input type="text" id="nr34_empresa" name="nr34_empresa" readonly class="readonly-field">
+                                        </div>
+                                        
+                                        <div class="field-group">
+                                            <label>Função</label>
+                                            <input type="text" id="nr34_funcao" name="nr34_funcao" readonly class="readonly-field">
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Linha de datas NR-34 -->
+                                    <div class="dates-row">
+                                        <div class="field-group">
+                                            <label>Data Emissão</label>
+                                            <input type="text" id="nr34_dataEmissao" placeholder="dd/mm/aaaa" maxlength="10" class="date-input-br nr34-focus" onkeydown="syscontrole.navegarFormulario(event, 'nr34_dataEmissao', 'nr35_dataEmissao')">
+                                        </div>
+                                        
+                                        <div class="field-group">
+                                            <label>Vencimento</label>
+                                            <input type="date" id="nr34_vencimento" name="nr34_vencimento" readonly class="calc-field">
+                                        </div>
+                                        
+                                        <div class="field-group">
+                                            <label>Dias Corridos</label>
+                                            <input type="text" id="nr34_diasCorridos" name="nr34_diasCorridos" readonly class="calc-field">
+                                        </div>
+                                        
+                                        <div class="field-group">
+                                            <label>Dias a Vencer</label>
+                                            <input type="text" id="nr34_diasVencer" name="nr34_diasVencer" readonly class="calc-field">
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Status -->
+                                    <div class="status-row">
+                                        <div class="field-group small">
+                                            <label>Status</label>
+                                            <select id="nr34_status" name="nr34_status" class="status-select" readonly>
+                                                <option value=""></option>
+                                                <option value="OK">OK</option>
+                                                <option value="Renovar">Renovar</option>
+                                                <option value="Vencido">Vencido</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Botões -->
+                                    <div class="buttons-row">
+                                        <button type="button" class="btn-form btn-novo">Novo</button>
+                                        <button type="submit" id="btnSalvarNr34" class="btn-form btn-cadastrar">Cadastrar</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Aba NR-35 -->
+                        <div class="nr-content" id="content-nr35">
+                            <div class="nr35-layout">
+                                <!-- Logo NR-35 -->
+                                <div class="nr35-logo-area">
+                                    <div class="nr35-icon">NR<br>35</div>
+                                    <div class="logo-id" id="logoIdNr35" style="font-size: 11px; color: #999; text-align: center; margin-top: 4px;">ID: -</div>
+                                </div>
+                                
+                                <!-- Área principal do formulário NR-35 -->
+                                <div class="nr35-form-area">
+                                    <!-- Campos principais (Nome, Empresa, Função) - READONLY -->
+                                    <div class="main-fields-row readonly-fields">
+                                        <div class="field-group">
+                                            <label>Nome</label>
+                                            <input type="text" id="nr35_nome" name="nr35_nome" readonly class="readonly-field">
+                                        </div>
+                                        
+                                        <div class="field-group">
+                                            <label>Empresa</label>
+                                            <input type="text" id="nr35_empresa" name="nr35_empresa" readonly class="readonly-field">
+                                        </div>
+                                        
+                                        <div class="field-group">
+                                            <label>Função</label>
+                                            <input type="text" id="nr35_funcao" name="nr35_funcao" readonly class="readonly-field">
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Linha de datas NR-35 -->
+                                    <div class="dates-row">
+                                        <div class="field-group">
+                                            <label>Data Emissão</label>
+                                            <input type="text" id="nr35_dataEmissao" placeholder="dd/mm/aaaa" maxlength="10" class="date-input-br nr35-focus" onkeydown="syscontrole.navegarFormulario(event, 'nr35_dataEmissao', 'epi_dataEmissao')">
+                                        </div>
+                                        
+                                        <div class="field-group">
+                                            <label>Vencimento</label>
+                                            <input type="date" id="nr35_vencimento" name="nr35_vencimento" readonly class="calc-field">
+                                        </div>
+                                        
+                                        <div class="field-group">
+                                            <label>Dias Corridos</label>
+                                            <input type="text" id="nr35_diasCorridos" name="nr35_diasCorridos" readonly class="calc-field">
+                                        </div>
+                                        
+                                        <div class="field-group">
+                                            <label>Dias a Vencer</label>
+                                            <input type="text" id="nr35_diasVencer" name="nr35_diasVencer" readonly class="calc-field">
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Status -->
+                                    <div class="status-row">
+                                        <div class="field-group small">
+                                            <label>Status</label>
+                                            <select id="nr35_status" name="nr35_status" class="status-select" readonly>
+                                                <option value=""></option>
+                                                <option value="OK">OK</option>
+                                                <option value="Renovar">Renovar</option>
+                                                <option value="Vencido">Vencido</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Botões -->
+                                    <div class="buttons-row">
+                                        <button type="button" class="btn-form btn-novo">Novo</button>
+                                        <button type="submit" id="btnSalvarNr35" class="btn-form btn-cadastrar">Cadastrar</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div class="nr-content" id="content-epi">
+                            <div class="epi-layout">
+                                <!-- Logo EPI -->
+                                <div class="epi-logo-area">
+                                    <div class="epi-icon">🦺<br>EPI</div>
+                                    <div class="logo-id" id="logoIdEpi" style="font-size: 11px; color: #999; text-align: center; margin-top: 4px;">ID: -</div>
+                                </div>
+                                
+                                <!-- Área principal do formulário EPI -->
+                                <div class="epi-form-area">
+                                    <!-- Campos principais (Nome, Empresa, Função) - READONLY -->
+                                    <div class="main-fields-row readonly-fields">
+                                        <div class="field-group">
+                                            <label>Nome</label>
+                                            <input type="text" id="epi_nome" name="epi_nome" readonly class="readonly-field">
+                                        </div>
+                                        
+                                        <div class="field-group">
+                                            <label>Empresa</label>
+                                            <input type="text" id="epi_empresa" name="epi_empresa" readonly class="readonly-field">
+                                        </div>
+                                        
+                                        <div class="field-group">
+                                            <label>Função</label>
+                                            <input type="text" id="epi_funcao" name="epi_funcao" readonly class="readonly-field">
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Linha de datas EPI -->
+                                    <div class="dates-row">
+                                        <div class="field-group">
+                                            <label>Data Emissão</label>
+                                            <input type="text" id="epi_dataEmissao" placeholder="dd/mm/aaaa" maxlength="10" class="date-input-br epi-focus" onkeydown="syscontrole.navegarFormulario(event, 'epi_dataEmissao', 'btnSalvar')">
+                                        </div>
+                                        
+                                        <div class="field-group">
+                                            <label>Vencimento</label>
+                                            <input type="date" id="epi_vencimento" name="epi_vencimento" readonly class="calc-field">
+                                        </div>
+                                        
+                                        <div class="field-group">
+                                            <label>Dias Corridos</label>
+                                            <input type="text" id="epi_diasCorridos" name="epi_diasCorridos" readonly class="calc-field">
+                                        </div>
+                                        
+                                        <div class="field-group">
+                                            <label>Dias a Vencer</label>
+                                            <input type="text" id="epi_diasVencer" name="epi_diasVencer" readonly class="calc-field">
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Status -->
+                                    <div class="status-row">
+                                        <div class="field-group small">
+                                            <label>Status</label>
+                                            <select id="epi_status" name="epi_status" class="status-select" readonly>
+                                                <option value=""></option>
+                                                <option value="OK">OK</option>
+                                                <option value="Renovar">Renovar</option>
+                                                <option value="Vencido">Vencido</option>
+                                            </select>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Botões -->
+                                    <div class="buttons-row">
+                                        <button type="button" class="btn-form btn-novo">Novo</button>
+                                        <button type="submit" id="btnSalvarEpi" class="btn-form btn-cadastrar">Cadastrar</button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Aba Fornecedor -->
+                        <div class="nr-content" id="content-fornecedor">
+                            <div class="fornecedor-layout">
+                                <!-- Logo + Campos -->
+                                <div class="fornecedor-header">
+                                    <div class="fornecedor-logo-box">
+                                        <img src="fornecedor-logo.jpg" alt="Fornecedor" class="fornecedor-logo-img">
+                                    </div>
+                                    
+                                    <div class="fornecedor-form">
+                                        <!-- Linha 1: Empresa, CNPJ -->
+                                        <div class="form-line">
+                                            <div class="form-field">
+                                                <label>Empresa</label>
+                                                <input type="text" id="fornecedor_empresa" placeholder="Nome da empresa" oninput="syscontrole.capitalizarNome(this)">
+                                            </div>
+                                            <div class="form-field">
+                                                <label>CNPJ</label>
+                                                <input type="text" id="fornecedor_cnpj" placeholder="00.000.000/0000-00">
+                                            </div>
+                                        </div>
+                                        
+                                        <!-- Linha 2: Telefone, Celular, Contato -->
+                                        <div class="form-line">
+                                            <div class="form-field">
+                                                <label>Telefone</label>
+                                                <input type="text" id="fornecedor_telefone" placeholder="(11) 0000-0000">
+                                            </div>
+                                            <div class="form-field">
+                                                <label>Celular</label>
+                                                <input type="text" id="fornecedor_celular" placeholder="(11) 90000-0000">
+                                            </div>
+                                            <div class="form-field">
+                                                <label>Contato</label>
+                                                <input type="text" id="fornecedor_contato" placeholder="Nome do contato" oninput="syscontrole.capitalizarNome(this)">
+                                            </div>
+                                        </div>
+                                        
+                                        <!-- Observações -->
+                                        <div class="form-line full-width">
+                                            <textarea id="fornecedor_observacao" placeholder="Observações"></textarea>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <!-- Botões, Busca e Filtro em uma linha -->
+                                <div class="fornecedor-footer">
+                                    <!-- Esquerda: Botões -->
+                                    <div class="buttons-group">
+                                        <button type="button" class="btn-novo" onclick="syscontrole.novoFornecedor()">Novo</button>
+                                        <button type="button" class="btn-salvar" id="btnSalvarFornecedor" onclick="syscontrole.salvarFornecedor()">Salvar</button>
+                                        
+                                        <!-- Radio buttons para exportação -->
+                                        <div class="export-options">
+                                            <label class="export-radio">
+                                                <input type="radio" name="export-type" value="excel" checked>
+                                                <span>📊 Excel</span>
+                                            </label>
+                                            <label class="export-radio">
+                                                <input type="radio" name="export-type" value="pdf">
+                                                <span>📄 PDF</span>
+                                            </label>
+                                            <button type="button" class="btn-exportar" onclick="syscontrole.exportarFornecedores()">Exportar</button>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Centro: Radio buttons + Campo de busca -->
+                                    <div class="search-section">
+                                        <!-- Radio buttons para escolher tipo de busca -->
+                                        <div class="search-type-selector">
+                                            <label class="radio-label">
+                                                <input type="radio" name="search-type" value="empresa" checked onchange="syscontrole.mostrarBuscaEmpresa()">
+                                                <span>Empresa</span>
+                                            </label>
+                                            <label class="radio-label">
+                                                <input type="radio" name="search-type" value="cnpj" onchange="syscontrole.mostrarBuscaCNPJ()">
+                                                <span>CNPJ</span>
+                                            </label>
+                                        </div>
+                                        
+                                        <!-- Campo de busca -->
+                                        <div class="search-inputs">
+                                            <input type="text" id="busca_empresa" placeholder="Digite o nome da empresa..." class="search-input">
+                                            <input type="text" id="busca_cnpj" placeholder="Digite o CNPJ..." class="search-input" style="display: none;">
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Direita: Toggle de situação -->
+                                    <div class="toggle-filtro-situacao">
+                                        <label>Situação:</label>
+                                        <div class="toggle-container-small">
+                                            <input type="checkbox" id="toggle-filtro-situacao" class="toggle-input-small" checked onchange="syscontrole.alternarFiltroSituacao(this.checked)">
+                                            <label for="toggle-filtro-situacao" class="toggle-label-small">
+                                                <span class="toggle-slider-small"></span>
+                                                <span class="toggle-text-small" id="texto-filtro-situacao">Ativos</span>
+                                            </label>
+                                        </div>
+                                    </div>
+                                </div>
+                                
+                                <!-- Headers da Tabela (FORA do container) -->
+                                <div class="table-header-row">
+                                    <div class="header-col empresa-col">Fornecedor</div>
+                                    <div class="header-col cnpj-col">CNPJ</div>
+                                    <div class="header-col contato-col">Contato</div>
+                                    <div class="header-col data-cadastro-col">Data Cadastro</div>
+                                    <div class="header-col data-inativacao-col">Data Inativação</div>
+                                    <div class="header-col situacao-col">Situação</div>
+                                </div>
+                                
+                                <!-- Tabela Grid -->
+                                <div class="fornecedor-grid">
+                                    <div id="fornecedorGridBody" class="grid-body">
+                                        <div class="grid-empty">Nenhum fornecedor encontrado</div>
+                                    </div>
+                                </div>
+                                
+                                <!-- Rodapé com contadores -->
+                                <div class="fornecedor-footer-stats">
+                                    <span class="footer-stat-item">
+                                        <span class="stat-icon">👤</span>
+                                        <span id="fornecedor-localizados">0</span> Localizados
+                                    </span>
+                                    <span class="footer-stat-item">
+                                        <span class="stat-icon">✓</span>
+                                        <span id="fornecedor-ativos">0</span> Ativo
+                                    </span>
+                                    <span class="footer-stat-item cancelado">
+                                        <span class="stat-icon">✕</span>
+                                        <span id="fornecedor-cancelados">0</span> Cancelado
+                                    </span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Aba Documentação -->
+                    <div class="nr-content" id="content-documentacao">
+                        <div class="doc-layout">
+                            <!-- Container com logo e conteúdo -->
+                            <div class="doc-container-with-logo">
+                                <!-- Logo à esquerda -->
+                                <div class="doc-logo-section">
+                                    <div class="doc-logo-icon">📋</div>
+                                    <div class="doc-logo-id">ID: -</div>
+                                    <!-- Grid de empresas cadastradas -->
+                                    <div class="doc-empresas-grid" id="docEmpresasGrid">
+                                        <!-- Preenchido dinamicamente -->
+                                    </div>
+                                </div>
+                                
+                                <!-- Conteúdo à direita -->
+                                <div class="doc-content-section">
+                            <!-- Campos em linha como tabela -->
+                            <div class="doc-table-item">
+                                <div class="doc-table-row">
+                                    <div class="doc-table-cell">
+                                        <label>Empresa</label>
+                                        <input type="text" id="doc_empresa" placeholder="Nome da empresa" readonly disabled>
+                                    </div>
+                                    <div class="doc-table-cell">
+                                        <label>CNPJ</label>
+                                        <input type="text" id="doc_cnpj" placeholder="00.000.000/0000-00" readonly disabled>
+                                    </div>
+                                    <div class="doc-table-cell doc-search-cell">
+                                        <label>Busca</label>
+                                        <div class="doc-search-group-inline">
+                                            <input type="radio" id="doc_search_empresa" name="doc_search_type" value="empresa" checked onchange="syscontrole.carregarComboDocumentacao()">
+                                            <label for="doc_search_empresa">Empresa</label>
+                                            <input type="radio" id="doc_search_cnpj" name="doc_search_type" value="cnpj" onchange="syscontrole.carregarComboDocumentacao()">
+                                            <label for="doc_search_cnpj">CNPJ</label>
+                                            <input type="text" id="doc_combo_busca" class="doc-combo-busca" list="doc_lista_busca" placeholder="Digite ou selecione..." onchange="syscontrole.selecionarDoComboDocumentacao()" oninput="syscontrole.filtrarComboDocumentacao()" ondblclick="this.select()">
+                                            <datalist id="doc_lista_busca"></datalist>
+                                            <!-- Radio hidden para manter compatibilidade -->
+                                            <input type="radio" id="doc_type_novo" name="doc_type" value="novo" checked style="display:none;">
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Tabela PGR -->
+                            <div class="doc-table-item">
+                                <div class="doc-table-header">PGR</div>
+                                <div class="doc-table-row">
+                                    <div class="doc-table-cell">
+                                        <label>Data Emissão</label>
+                                        <input type="text" id="doc_pgr_emissao" placeholder="dd/mm/aaaa" maxlength="10" onkeydown="syscontrole.navegarDocumentacao(event, 'pgr')">
+                                    </div>
+                                    <div class="doc-table-cell">
+                                        <label>Vencimento</label>
+                                        <input type="text" id="doc_pgr_vencimento" readonly class="readonly-field">
+                                    </div>
+                                    <div class="doc-table-cell">
+                                        <label>Dias Corridos</label>
+                                        <input type="text" id="doc_pgr_dias_corridos" readonly class="readonly-field">
+                                    </div>
+                                    <div class="doc-table-cell">
+                                        <label>Dias a Vencer</label>
+                                        <input type="text" id="doc_pgr_dias_vencer" readonly class="readonly-field">
+                                    </div>
+                                    <div class="doc-table-cell">
+                                        <label>Status</label>
+                                        <select id="doc_pgr_status" disabled class="readonly-field">
+                                            <option value="">-</option>
+                                            <option value="OK">OK</option>
+                                            <option value="Renovar">Renovar</option>
+                                            <option value="Vencido">Vencido</option>
+                                        </select>
+                                    </div>
+                                    <div class="doc-table-cell doc-buttons-cell">
+                                        <button type="button" id="btnSalvarDocumentacao" class="btn-doc-save-small" onclick="syscontrole.salvarDocumentacao()">
+                                            Cadastrar
+                                        </button>
+                                        <button type="button" id="btnLimparDocumentacao" class="btn-doc-limpar-small" onclick="syscontrole.limparDocumentacao()">
+                                            Limpar
+                                        </button>
+                                        <button type="button" id="btnExcluirDocumentacao" class="btn-doc-excluir-small" onclick="syscontrole.excluirDocumentacao()" title="Excluir registro permanentemente">
+                                            🗑️
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- Tabela PCMSO -->
+                            <div class="doc-table-item">
+                                <div class="doc-table-header">PCMSO</div>
+                                <div class="doc-table-row">
+                                    <div class="doc-table-cell">
+                                        <label>Data Emissão</label>
+                                        <input type="text" id="doc_pcmso_emissao" placeholder="dd/mm/aaaa" maxlength="10" onkeydown="syscontrole.navegarDocumentacao(event, 'pcmso')">
+                                    </div>
+                                    <div class="doc-table-cell">
+                                        <label>Vencimento</label>
+                                        <input type="text" id="doc_pcmso_vencimento" readonly class="readonly-field">
+                                    </div>
+                                    <div class="doc-table-cell">
+                                        <label>Dias Corridos</label>
+                                        <input type="text" id="doc_pcmso_dias_corridos" readonly class="readonly-field">
+                                    </div>
+                                    <div class="doc-table-cell">
+                                        <label>Dias a Vencer</label>
+                                        <input type="text" id="doc_pcmso_dias_vencer" readonly class="readonly-field">
+                                    </div>
+                                    <div class="doc-table-cell">
+                                        <label>Status</label>
+                                        <select id="doc_pcmso_status" disabled class="readonly-field">
+                                            <option value="">-</option>
+                                            <option value="OK">OK</option>
+                                            <option value="Renovar">Renovar</option>
+                                            <option value="Vencido">Vencido</option>
+                                        </select>
+                                    </div>
+                                    <div class="doc-table-cell">
+                                        <label>Fornecedor</label>
+                                        <span id="doc_fornecedor_situacao" class="fornecedor-situacao-badge" style="display: inline-block; padding: 5px 15px; border-radius: 4px; font-weight: bold; text-align: center; min-width: 80px;">-</span>
+                                    </div>
+                                </div>
+                            </div>
+
+                            
+                            <!-- Rodapé com filtros -->
+                            <div class="doc-footer">
+                                <div class="doc-footer-tabs">
+                                    <div class="doc-footer-tab">
+                                        <span class="doc-tab-label">PGR</span>
+                                        <span class="doc-tab-count qda-vencido">Qdta: <span id="pgr-vencido">0</span></span>
+                                        <span class="doc-tab-count qda-renovar">Qdta: <span id="pgr-renovar">0</span></span>
+                                        <select id="filter-pgr" class="doc-filter-select" onchange="syscontrole.filtrarGridDocumentacao()">
+                                            <option value="">Todos</option>
+                                            <option value="ok">OK</option>
+                                            <option value="renovar">Renovar</option>
+                                            <option value="vencido">Vencido</option>
+                                        </select>
+                                    </div>
+                                    
+                                    <div class="doc-footer-tab">
+                                        <span class="doc-tab-label">PCMSO</span>
+                                        <span class="doc-tab-count qda-vencido">Qdta: <span id="pcmso-vencido">0</span></span>
+                                        <span class="doc-tab-count qda-renovar">Qdta: <span id="pcmso-renovar">0</span></span>
+                                        <select id="filter-pcmso" class="doc-filter-select" onchange="syscontrole.filtrarGridDocumentacao()">
+                                            <option value="">Todos</option>
+                                            <option value="ok">OK</option>
+                                            <option value="renovar">Renovar</option>
+                                            <option value="vencido">Vencido</option>
+                                        </select>
+                                    </div>
+                                </div>
+                            </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Área da foto -->
+                    <div class="photo-section">
+                        <div class="photo-container">
+                            <img id="fotoPreview" class="foto-preview" src="" alt="Foto" style="display: none;">
+                            <div id="fotoPlaceholder" class="foto-placeholder-large">
+                                👤
+                            </div>
+                        </div>
+                        
+                        <div class="photo-buttons">
+                            <input type="file" id="foto" name="foto" accept="image/*" style="display: none;">
+                            <button type="button" id="btnImagem" class="btn-photo" onclick="document.getElementById('foto').click()" onkeydown="syscontrole.navegarFormulario(event, 'btnImagem', 'anotacoes')">
+                                📷 Imagem
+                            </button>
+                            <button type="button" class="btn-photo btn-remove" onclick="syscontrole.removerFoto()">
+                                ❌
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </form>
+        </div>
+    </div>
+    
+    <!-- Modal de Confirmação -->
+    <div id="modalConfirm" class="modal">
+        <div class="modal-content modal-small">
+            <div class="modal-header">
+                <h3 id="confirmTitle">Confirmar Ação</h3>
+                <span class="modal-close">&times;</span>
+            </div>
+            <div class="modal-body">
+                <p id="confirmMessage">Tem certeza que deseja realizar esta ação?</p>
+            </div>
+            <div class="modal-footer">
+                <button id="btnConfirmar" class="btn btn-danger">Confirmar</button>
+                <button id="btnCancelarConfirm" class="btn btn-secondary">Cancelar</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Modal de Exportação com Seleção de Colunas -->
+    <div id="modalExportar" class="modal">
+        <div class="modal-content modal-exportar">
+            <div class="modal-header">
+                <h3>Exportar Dados</h3>
+                <span class="modal-close" onclick="syscontrole.fecharModalExportar()">&times;</span>
+            </div>
+            <div class="modal-body">
+                <p style="margin-bottom: 15px; font-weight: bold;">Selecione as colunas a exportar:</p>
+                
+                <div class="export-options">
+                    <label class="export-checkbox">
+                        <input type="checkbox" id="exportSelectAll" onchange="syscontrole.toggleSelectAllExport(this)">
+                        <span style="font-weight: bold;">Selecionar Todas</span>
+                    </label>
+                </div>
+                
+                <div id="exportColumnsList" class="export-columns-list">
+                    <!-- Colunas serão inseridas via JavaScript -->
+                </div>
+                
+                <div class="export-format" style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #ddd;">
+                    <p style="margin-bottom: 10px; font-weight: bold;">Formato:</p>
+                    <label class="export-radio">
+                        <input type="radio" name="exportFormat" value="excel" checked>
+                        <span>📊 Excel</span>
+                    </label>
+                    <label class="export-radio">
+                        <input type="radio" name="exportFormat" value="pdf">
+                        <span>📄 PDF</span>
+                    </label>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-primary" onclick="syscontrole.confirmarExportacao()">Exportar</button>
+                <button class="btn btn-secondary" onclick="syscontrole.fecharModalExportar()">Cancelar</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Toast de Notificações -->
+    <div id="toast" class="toast">
+        <span id="toastMessage"></span>
+        <button id="toastClose" class="toast-close">&times;</button>
+    </div>
+    
+    <!-- Modal Controle de Presença -->
+    <div id="modalControlePresenca" class="modal">
+        <div class="modal-content modal-controle-presenca">
+            <div class="modal-header">
+                <h2>📋 Controle de Presença - <span id="presencaMesAnoAtual"></span></h2>
+                <span class="modal-close" onclick="syscontrole.fecharControlePresenca()">&times;</span>
+            </div>
+            <div class="modal-body" style="padding: 10px;">
+                <div class="presenca-toolbar">
+                    <span id="presencaQtdFunc">0 funcionários ativos</span>
+                    
+                    <!-- Campos de pesquisa -->
+                    <div class="presenca-filtros">
+                        <input type="text" id="presencaFiltroNome" placeholder="Buscar Nome..." class="presenca-filtro-input" oninput="syscontrole.filtrarPresenca()">
+                        <input type="text" id="presencaFiltroEmpresa" placeholder="Buscar Empresa..." class="presenca-filtro-input" oninput="syscontrole.filtrarPresenca()">
+                        <input type="text" id="presencaFiltroFuncao" placeholder="Buscar Função..." class="presenca-filtro-input" oninput="syscontrole.filtrarPresenca()">
+                        <button class="btn btn-sm" onclick="syscontrole.limparFiltrosPresenca()">Limpar</button>
+                    </div>
+                    
+                    <div class="presenca-legenda">
+                        <span class="legenda-item"><span class="legenda-cor" style="background:#90EE90;">P</span> Presente</span>
+                        <span class="legenda-item"><span class="legenda-cor" style="background:#FFB6C1;">F</span> Falta</span>
+                        <span class="legenda-item"><span class="legenda-cor" style="background:#87CEEB;">A</span> Atestado</span>
+                        <span class="legenda-item"><span class="legenda-cor" style="background:#DDA0DD;">FE</span> Férias</span>
+                        <span class="legenda-item"><span class="legenda-cor" style="background:#FFD700;">FO</span> Folga</span>
+                    </div>
+                    <button class="btn btn-primary btn-sm" onclick="syscontrole.exportarControlePresenca()">📥 Exportar Excel</button>
+                </div>
+                <div class="presenca-table-container">
+                    <table id="tabelaPresenca" class="tabela-presenca">
+                        <thead id="presencaHeader"></thead>
+                        <tbody id="presencaBody"></tbody>
+                    </table>
+                </div>
+                <div class="presenca-info-bottom">
+                    <p>⚠️ Dados mantidos em memória. Na virada do mês, os dados são resetados. Exporte para não perder!</p>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Modal Habilitar Cursos -->
+    <div id="modalHabilitarCursos" class="modal">
+        <div class="modal-content modal-habilitar-cursos">
+            <div class="modal-header">
+                <h2>Habilite os Cursos para monitoramento</h2>
+                <span class="modal-close" onclick="syscontrole.fecharHabilitarCursos()">&times;</span>
+            </div>
+            <div class="modal-body-cursos">
+                <div class="cursos-grid">
+                    <div class="curso-item">
+                        <input type="checkbox" id="chk_aso" value="ASO" checked>
+                        <label for="chk_aso">ASO</label>
+                    </div>
+                    <div class="curso-item">
+                        <input type="checkbox" id="chk_nr18" value="NR-18">
+                        <label for="chk_nr18">NR-18</label>
+                    </div>
+                    <div class="curso-item">
+                        <input type="checkbox" id="chk_nr06" value="NR-06">
+                        <label for="chk_nr06">NR-06</label>
+                    </div>
+                    <div class="curso-item">
+                        <input type="checkbox" id="chk_nr20" value="NR-20">
+                        <label for="chk_nr20">NR-20</label>
+                    </div>
+                    <div class="curso-item">
+                        <input type="checkbox" id="chk_nr10" value="NR-10">
+                        <label for="chk_nr10">NR-10</label>
+                    </div>
+                    <div class="curso-item">
+                        <input type="checkbox" id="chk_nr33" value="NR-33">
+                        <label for="chk_nr33">NR-33</label>
+                    </div>
+                    <div class="curso-item">
+                        <input type="checkbox" id="chk_nr11" value="NR-11">
+                        <label for="chk_nr11">NR-11</label>
+                    </div>
+                    <div class="curso-item">
+                        <input type="checkbox" id="chk_nr34" value="NR-34">
+                        <label for="chk_nr34">NR-34</label>
+                    </div>
+                    <div class="curso-item">
+                        <input type="checkbox" id="chk_nr12" value="NR-12">
+                        <label for="chk_nr12">NR-12</label>
+                    </div>
+                    <div class="curso-item">
+                        <input type="checkbox" id="chk_nr35" value="NR-35">
+                        <label for="chk_nr35">NR-35</label>
+                    </div>
+                    <div class="curso-item">
+                        <input type="checkbox" id="chk_nr17" value="NR-17">
+                        <label for="chk_nr17">NR-17</label>
+                    </div>
+                    <div class="curso-item">
+                        <input type="checkbox" id="chk_epi" value="EPI">
+                        <label for="chk_epi">EPI</label>
+                    </div>
+                </div>
+                <div class="modal-footer-cursos">
+                    <button type="button" class="btn-salvar-cursos" onclick="syscontrole.salvarHabilitarCursos()">Salvar</button>
+                    <button type="button" class="btn-cancelar-cursos" onclick="syscontrole.fecharHabilitarCursos()">Cancelar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Modal Configuração do Relatório -->
+    <div id="modalConfiguracao" class="modal">
+        <div class="modal-content modal-configuracao">
+            <div class="modal-header">
+                <h3>Configuração do Relatório</h3>
+                <span class="modal-close" onclick="syscontrole.fecharConfiguracao()">&times;</span>
+            </div>
+            <div class="modal-body-config">
+                <div class="config-field">
+                    <label for="configLogo">Logo da Empresa:</label>
+                    <div class="logo-upload-area">
+                        <img id="previewLogo" src="/Logo-Hoss.jpg" alt="Logo" class="logo-preview-img">
+                        <input type="file" id="configLogo" accept="image/*" style="display:none" onchange="syscontrole.previewLogoConfig(this)">
+                        <button type="button" class="btn-selecionar-logo" onclick="document.getElementById('configLogo').click()">📷 Alterar Logo</button>
+                    </div>
+                </div>
+                <div class="config-field">
+                    <label for="configTitulo">Título do Relatório:</label>
+                    <input type="text" id="configTitulo" placeholder="Ex: Obra Enkyo Guarulhos" maxlength="100">
+                </div>
+                <div class="config-preview">
+                    <p><strong>Prévia do Cabeçalho:</strong></p>
+                    <div class="preview-header-container">
+                        <img id="previewLogoHeader" src="/Logo-Hoss.jpg" alt="Logo" class="preview-logo">
+                        <div class="preview-header" id="previewTitulo">Obra Enkyo Guarulhos</div>
+                    </div>
+                    <div class="preview-footer">SSMA</div>
+                </div>
+            </div>
+            <div class="modal-footer-config">
+                <button type="button" class="btn-salvar-config" onclick="syscontrole.salvarConfiguracao()">Salvar</button>
+                <button type="button" class="btn-cancelar-config" onclick="syscontrole.fecharConfiguracao()">Cancelar</button>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Modal Gerenciar Usuários -->
+    <div id="modalUsuarios" class="modal" style="display: none;">
+        <div class="modal-content" style="max-width: 700px;">
+            <div class="modal-header" style="background: #87CEEB;">
+                <h2>👥 Gerenciar Usuários</h2>
+                <button class="modal-close" onclick="syscontrole.fecharGerenciarUsuarios()">&times;</button>
+            </div>
+            <div class="modal-body" style="padding: 20px;">
+                <div style="margin-bottom: 20px; padding: 15px; background: #f5f5f5; border-radius: 5px;">
+                    <h4 style="margin-bottom: 10px;">Novo Usuário</h4>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr 1fr auto auto; gap: 10px; align-items: end;">
+                        <div>
+                            <label style="font-size: 12px;">Login</label>
+                            <input type="text" id="novoUserLogin" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
+                        </div>
+                        <div>
+                            <label style="font-size: 12px;">Senha</label>
+                            <input type="password" id="novoUserSenha" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
+                        </div>
+                        <div>
+                            <label style="font-size: 12px;">Nome</label>
+                            <input type="text" id="novoUserNome" style="width: 100%; padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
+                        </div>
+                        <div>
+                            <label style="font-size: 12px;">Tipo</label>
+                            <select id="novoUserTipo" style="padding: 8px; border: 1px solid #ccc; border-radius: 4px;">
+                                <option value="comum">Comum</option>
+                                <option value="master">Master</option>
+                            </select>
+                        </div>
+                        <button onclick="syscontrole.criarUsuario()" style="padding: 8px 15px; background: #4CAF50; color: white; border: none; border-radius: 4px; cursor: pointer;">Criar</button>
+                    </div>
+                </div>
+                <table style="width: 100%; border-collapse: collapse;">
+                    <thead>
+                        <tr style="background: #87CEEB;">
+                            <th style="padding: 10px; text-align: left;">Login</th>
+                            <th style="padding: 10px; text-align: left;">Nome</th>
+                            <th style="padding: 10px; text-align: center;">Tipo</th>
+                            <th style="padding: 10px; text-align: center;">Status</th>
+                            <th style="padding: 10px; text-align: center;">Ações</th>
+                        </tr>
+                    </thead>
+                    <tbody id="listaUsuarios"></tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Modal Backup e Manutenção (Somente Master) -->
+    <div id="modalBackup" class="modal" style="display: none;">
+        <div class="modal-content" style="max-width: 600px;">
+            <div class="modal-header" style="background: linear-gradient(135deg, #e74c3c, #c0392b);">
+                <h2>🔧 Backup e Manutenção</h2>
+                <button class="modal-close" onclick="syscontrole.fecharBackup()">&times;</button>
+            </div>
+            <div class="modal-body" style="padding: 20px;">
+                <!-- Seção Backup -->
+                <div style="margin-bottom: 25px; padding: 15px; background: #e8f5e9; border-radius: 8px; border-left: 4px solid #4CAF50;">
+                    <h3 style="margin-bottom: 15px; color: #2e7d32;">💾 Backup do Sistema</h3>
+                    <p style="font-size: 12px; color: #666; margin-bottom: 15px;">Faça o download de todos os dados do sistema (funcionários, fornecedores, documentação, configurações).</p>
+                    <div style="display: flex; gap: 10px;">
+                        <button onclick="syscontrole.fazerBackup()" style="padding: 10px 20px; background: #4CAF50; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: bold;">
+                            📥 Fazer Backup Completo
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Seção Restaurar -->
+                <div style="margin-bottom: 25px; padding: 15px; background: #e3f2fd; border-radius: 8px; border-left: 4px solid #2196F3;">
+                    <h3 style="margin-bottom: 15px; color: #1565c0;">📤 Restaurar Backup</h3>
+                    <p style="font-size: 12px; color: #666; margin-bottom: 15px;">Restaure os dados a partir de um arquivo de backup. <strong style="color: #e74c3c;">ATENÇÃO: Isso substituirá todos os dados atuais!</strong></p>
+                    <div style="display: flex; gap: 10px; align-items: center;">
+                        <input type="file" id="arquivoBackup" accept=".json" style="flex: 1;">
+                        <button onclick="syscontrole.restaurarBackup()" style="padding: 10px 20px; background: #2196F3; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: bold;">
+                            📤 Restaurar
+                        </button>
+                    </div>
+                </div>
+                
+                <!-- Seção Zerar Dados -->
+                <div style="padding: 15px; background: #ffebee; border-radius: 8px; border-left: 4px solid #e74c3c;">
+                    <h3 style="margin-bottom: 15px; color: #c62828;">⚠️ Zerar Cadastros</h3>
+                    <p style="font-size: 12px; color: #666; margin-bottom: 15px;"><strong style="color: #e74c3c;">CUIDADO!</strong> Essas ações são irreversíveis. Os IDs voltarão para zero.</p>
+                    
+                    <div style="display: flex; flex-direction: column; gap: 10px;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px; background: white; border-radius: 5px;">
+                            <div>
+                                <strong>👷 Funcionários (SSMA)</strong>
+                                <span id="countFuncionarios" style="font-size: 11px; color: #666; margin-left: 10px;">0 registros</span>
+                            </div>
+                            <button onclick="syscontrole.zerarFuncionarios()" style="padding: 8px 15px; background: #e74c3c; color: white; border: none; border-radius: 5px; cursor: pointer;">
+                                🗑️ Zerar
+                            </button>
+                        </div>
+                        
+                        <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px; background: white; border-radius: 5px;">
+                            <div>
+                                <strong>🏢 Fornecedores</strong>
+                                <span id="countFornecedores" style="font-size: 11px; color: #666; margin-left: 10px;">0 registros</span>
+                            </div>
+                            <button onclick="syscontrole.zerarFornecedores()" style="padding: 8px 15px; background: #e74c3c; color: white; border: none; border-radius: 5px; cursor: pointer;">
+                                🗑️ Zerar
+                            </button>
+                        </div>
+                        
+                        <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px; background: white; border-radius: 5px;">
+                            <div>
+                                <strong>📋 Documentação</strong>
+                                <span id="countDocumentacao" style="font-size: 11px; color: #666; margin-left: 10px;">0 registros</span>
+                            </div>
+                            <button onclick="syscontrole.zerarDocumentacao()" style="padding: 8px 15px; background: #e74c3c; color: white; border: none; border-radius: 5px; cursor: pointer;">
+                                🗑️ Zerar
+                            </button>
+                        </div>
+                        
+                        <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px; background: white; border-radius: 5px;">
+                            <div>
+                                <strong>📅 Lista de Presença</strong>
+                                <span id="countPresenca" style="font-size: 11px; color: #666; margin-left: 10px;">0 registros</span>
+                            </div>
+                            <button onclick="syscontrole.zerarPresenca()" style="padding: 8px 15px; background: #e74c3c; color: white; border: none; border-radius: 5px; cursor: pointer;">
+                                🗑️ Zerar
+                            </button>
+                        </div>
+                        
+                        <div style="display: flex; justify-content: space-between; align-items: center; padding: 10px; background: #fff3e0; border-radius: 5px; border: 2px solid #ff9800;">
+                            <div>
+                                <strong style="color: #e65100;">💥 ZERAR TUDO</strong>
+                                <span style="font-size: 11px; color: #666; margin-left: 10px;">Funcionários + Fornecedores + Documentação + Presença</span>
+                            </div>
+                            <button onclick="syscontrole.zerarTudo()" style="padding: 8px 15px; background: #ff5722; color: white; border: none; border-radius: 5px; cursor: pointer; font-weight: bold;">
+                                ⚠️ Zerar Tudo
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <script src="anti-flicker.js"></script>
+    <script src="script.js"></script>
+</body>
+</html>

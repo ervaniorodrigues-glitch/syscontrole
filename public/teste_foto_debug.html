@@ -1,0 +1,177 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Debug Foto</title>
+    <style>
+        body { font-family: Arial; padding: 20px; background: #f5f5f5; }
+        .container { max-width: 800px; margin: 0 auto; background: white; padding: 20px; border-radius: 8px; }
+        .section { margin: 20px 0; padding: 15px; border-left: 4px solid #007bff; }
+        button { padding: 10px 20px; margin: 5px; cursor: pointer; background: #007bff; color: white; border: none; border-radius: 4px; }
+        button:hover { background: #0056b3; }
+        input[type="file"] { margin: 10px 0; }
+        .log { background: #f9f9f9; padding: 15px; margin: 10px 0; border-radius: 4px; max-height: 400px; overflow-y: auto; font-family: monospace; font-size: 12px; border: 1px solid #ddd; }
+        .log-item { margin: 5px 0; padding: 5px; }
+        .success { color: #28a745; background: #d4edda; padding: 5px; border-radius: 3px; }
+        .error { color: #dc3545; background: #f8d7da; padding: 5px; border-radius: 3px; }
+        .info { color: #0c5460; background: #d1ecf1; padding: 5px; border-radius: 3px; }
+        img { max-width: 200px; margin: 10px 0; border: 1px solid #ddd; border-radius: 4px; }
+        .form-group { margin: 15px 0; }
+        label { display: block; margin-bottom: 5px; font-weight: bold; }
+        input[type="text"], textarea { width: 100%; padding: 8px; margin: 5px 0; border: 1px solid #ddd; border-radius: 4px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔧 Debug - Alteração de Foto</h1>
+        
+        <div class="section">
+            <h2>📸 Foto Atual (ID: 1)</h2>
+            <img id="fotoAtual" src="/api/foto/1" alt="Foto Atual" onerror="this.style.display='none'">
+            <button onclick="recarregarFoto()">🔄 Recarregar Foto</button>
+        </div>
+        
+        <div class="section">
+            <h2>📝 Formulário de Teste</h2>
+            <div class="form-group">
+                <label>Nome:</label>
+                <input type="text" id="nome" value="Ervanio Freitas Rodrigues">
+            </div>
+            <div class="form-group">
+                <label>Empresa:</label>
+                <input type="text" id="empresa" value="Hoss">
+            </div>
+            <div class="form-group">
+                <label>Função:</label>
+                <input type="text" id="funcao" value="Técnico de Segurança">
+            </div>
+            <div class="form-group">
+                <label>Anotações:</label>
+                <textarea id="anotacoes" rows="3">Teste de alteração de foto</textarea>
+            </div>
+            <div class="form-group">
+                <label>Nova Foto:</label>
+                <input type="file" id="foto" accept="image/*">
+                <div id="preview"></div>
+            </div>
+            <button onclick="enviarAlteracao()">✅ Enviar Alteração</button>
+        </div>
+        
+        <div class="section">
+            <h2>📋 Log de Execução</h2>
+            <div class="log" id="log"></div>
+        </div>
+    </div>
+
+    <script>
+        const addLog = (msg, type = 'info') => {
+            const logDiv = document.getElementById('log');
+            const item = document.createElement('div');
+            item.className = `log-item ${type}`;
+            item.textContent = `[${new Date().toLocaleTimeString()}] ${msg}`;
+            logDiv.appendChild(item);
+            logDiv.scrollTop = logDiv.scrollHeight;
+        };
+
+        document.getElementById('foto').addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                addLog(`✅ Arquivo selecionado: ${file.name} (${(file.size / 1024).toFixed(2)} KB)`, 'success');
+                
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    document.getElementById('preview').innerHTML = `<img src="${event.target.result}" alt="Preview">`;
+                    addLog(`✅ Preview carregado`, 'success');
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+
+        async function recarregarFoto() {
+            try {
+                addLog('🔄 Recarregando foto...', 'info');
+                const img = document.getElementById('fotoAtual');
+                img.src = '/api/foto/1?' + new Date().getTime();
+                addLog('✅ Foto recarregada', 'success');
+            } catch (error) {
+                addLog(`❌ Erro: ${error.message}`, 'error');
+            }
+        }
+
+        async function enviarAlteracao() {
+            try {
+                const fotoInput = document.getElementById('foto');
+                
+                if (!fotoInput.files || !fotoInput.files[0]) {
+                    addLog('❌ Nenhuma foto selecionada!', 'error');
+                    return;
+                }
+
+                addLog('🔄 Iniciando envio...', 'info');
+                
+                const formData = new FormData();
+                
+                // Adicionar campos
+                formData.append('nome', document.getElementById('nome').value);
+                formData.append('empresa', document.getElementById('empresa').value);
+                formData.append('funcao', document.getElementById('funcao').value);
+                formData.append('vencimento', '2026-12-08');
+                formData.append('anotacoes', document.getElementById('anotacoes').value);
+                formData.append('situacao', 'S');
+                formData.append('ambientacao', 'S');
+                formData.append('nr10_dataEmissao', '09/12/2025');
+                formData.append('nr10_vencimento', '2027-12-09');
+                formData.append('nr10_status', 'OK');
+                formData.append('nr11_vencimento', '');
+                formData.append('nr11_status', '');
+                formData.append('nr12_vencimento', '');
+                formData.append('nr12_status', '');
+                formData.append('nr17_vencimento', '');
+                formData.append('nr17_status', '');
+                formData.append('nr18_vencimento', '');
+                formData.append('nr18_status', '');
+                formData.append('nr33_vencimento', '');
+                formData.append('nr33_status', '');
+                formData.append('nr35_vencimento', '');
+                formData.append('nr35_status', '');
+                formData.append('epi_vencimento', '');
+                formData.append('epi_status', '');
+                
+                // Adicionar foto
+                const file = fotoInput.files[0];
+                formData.append('foto', file);
+                
+                addLog(`📤 Enviando: ${file.name} (${(file.size / 1024).toFixed(2)} KB)`, 'info');
+                
+                const response = await fetch('/api/ssma/1', {
+                    method: 'PUT',
+                    body: formData
+                });
+
+                addLog(`📊 Status HTTP: ${response.status}`, 'info');
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    addLog(`✅ ${data.message}`, 'success');
+                    
+                    // Limpar
+                    fotoInput.value = '';
+                    document.getElementById('preview').innerHTML = '';
+                    
+                    // Recarregar foto após 1 segundo
+                    setTimeout(() => {
+                        addLog('🔄 Recarregando foto...', 'info');
+                        recarregarFoto();
+                    }, 1000);
+                } else {
+                    addLog(`❌ Erro: ${data.error}`, 'error');
+                }
+            } catch (error) {
+                addLog(`❌ Erro de conexão: ${error.message}`, 'error');
+            }
+        }
+
+        addLog('✅ Página carregada', 'success');
+    </script>
+</body>
+</html>

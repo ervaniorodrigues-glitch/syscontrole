@@ -1,0 +1,267 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Teste de Alteração de Foto</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 600px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+        }
+        .form-group {
+            margin: 20px 0;
+        }
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-weight: bold;
+            color: #555;
+        }
+        input[type="file"],
+        input[type="text"],
+        select {
+            width: 100%;
+            padding: 10px;
+            border: 1px solid #ddd;
+            border-radius: 4px;
+            box-sizing: border-box;
+            font-size: 14px;
+        }
+        button {
+            background: #4CAF50;
+            color: white;
+            padding: 12px 30px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            width: 100%;
+            margin-top: 20px;
+        }
+        button:hover {
+            background: #45a049;
+        }
+        .preview {
+            margin-top: 20px;
+            text-align: center;
+        }
+        .preview img {
+            max-width: 200px;
+            max-height: 200px;
+            border: 2px solid #ddd;
+            border-radius: 4px;
+        }
+        .message {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 4px;
+            text-align: center;
+            font-weight: bold;
+        }
+        .success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+        .loading {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🖼️ Teste de Alteração de Foto</h1>
+        
+        <form id="formTeste">
+            <div class="form-group">
+                <label for="registroId">ID do Registro:</label>
+                <input type="text" id="registroId" value="1" readonly>
+            </div>
+            
+            <div class="form-group">
+                <label for="nome">Nome:</label>
+                <input type="text" id="nome" placeholder="Nome do funcionário" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="empresa">Empresa:</label>
+                <input type="text" id="empresa" placeholder="Nome da empresa" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="funcao">Função:</label>
+                <input type="text" id="funcao" placeholder="Função do funcionário" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="foto">Selecionar Foto:</label>
+                <input type="file" id="foto" accept="image/*" required>
+            </div>
+            
+            <div class="preview" id="preview"></div>
+            
+            <button type="submit">Alterar Foto</button>
+        </form>
+        
+        <div id="message"></div>
+    </div>
+
+    <script>
+        // Carregar dados do registro ao abrir a página
+        async function carregarRegistro() {
+            try {
+                const response = await fetch('/api/ssma/1');
+                const registro = await response.json();
+                
+                document.getElementById('nome').value = registro.Nome || '';
+                document.getElementById('empresa').value = registro.Empresa || '';
+                document.getElementById('funcao').value = registro.Funcao || '';
+                
+                console.log('✅ Registro carregado:', registro);
+            } catch (error) {
+                console.error('Erro ao carregar registro:', error);
+                mostrarMensagem('Erro ao carregar registro', 'error');
+            }
+        }
+        
+        // Preview da foto
+        document.getElementById('foto').addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    const preview = document.getElementById('preview');
+                    preview.innerHTML = `<img src="${event.target.result}" alt="Preview">`;
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+        
+        // Enviar formulário
+        document.getElementById('formTeste').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            const id = document.getElementById('registroId').value;
+            const nome = document.getElementById('nome').value;
+            const empresa = document.getElementById('empresa').value;
+            const funcao = document.getElementById('funcao').value;
+            const fotoInput = document.getElementById('foto');
+            
+            if (!fotoInput.files[0]) {
+                mostrarMensagem('Selecione uma foto', 'error');
+                return;
+            }
+            
+            mostrarMensagem('Enviando...', 'loading');
+            
+            try {
+                // Converter foto para base64
+                const file = fotoInput.files[0];
+                const fotoBase64 = await new Promise((resolve, reject) => {
+                    const reader = new FileReader();
+                    reader.onload = () => {
+                        const base64 = reader.result.split(',')[1];
+                        resolve(base64);
+                    };
+                    reader.onerror = reject;
+                    reader.readAsDataURL(file);
+                });
+                
+                console.log('📸 Foto convertida para base64:', fotoBase64.length, 'caracteres');
+                
+                // Preparar dados
+                const dados = {
+                    nome,
+                    empresa,
+                    funcao,
+                    vencimento: '',
+                    anotacoes: 'Teste de alteração de foto',
+                    situacao: 'S',
+                    ambientacao: 'N',
+                    nr10_dataEmissao: '',
+                    nr10_vencimento: '',
+                    nr10_status: '',
+                    nr11_dataEmissao: '',
+                    nr11_vencimento: '',
+                    nr11_status: '',
+                    nr12_dataEmissao: '',
+                    nr12_vencimento: '',
+                    nr12_status: '',
+                    nr17_dataEmissao: '',
+                    nr17_vencimento: '',
+                    nr17_status: '',
+                    nr18_dataEmissao: '',
+                    nr18_vencimento: '',
+                    nr18_status: '',
+                    nr33_dataEmissao: '',
+                    nr33_vencimento: '',
+                    nr33_status: '',
+                    nr35_dataEmissao: '',
+                    nr35_vencimento: '',
+                    nr35_status: '',
+                    epi_dataEmissao: '',
+                    epi_vencimento: '',
+                    epi_status: '',
+                    fotoBase64
+                };
+                
+                // Enviar PUT
+                const response = await fetch(`/api/ssma/${id}`, {
+                    method: 'PUT',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(dados)
+                });
+                
+                const result = await response.json();
+                
+                if (response.ok) {
+                    mostrarMensagem('✅ Foto alterada com sucesso!', 'success');
+                    console.log('✅ Resposta do servidor:', result);
+                    
+                    // Limpar input
+                    fotoInput.value = '';
+                    document.getElementById('preview').innerHTML = '';
+                } else {
+                    mostrarMensagem('❌ Erro: ' + result.error, 'error');
+                    console.error('Erro do servidor:', result);
+                }
+            } catch (error) {
+                console.error('Erro:', error);
+                mostrarMensagem('❌ Erro ao enviar foto: ' + error.message, 'error');
+            }
+        });
+        
+        function mostrarMensagem(texto, tipo) {
+            const messageDiv = document.getElementById('message');
+            messageDiv.textContent = texto;
+            messageDiv.className = 'message ' + tipo;
+        }
+        
+        // Carregar registro ao abrir a página
+        carregarRegistro();
+    </script>
+</body>
+</html>

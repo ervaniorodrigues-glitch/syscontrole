@@ -1,0 +1,400 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Teste de Upload de Foto</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        
+        .container {
+            background: white;
+            border-radius: 15px;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.3);
+            max-width: 500px;
+            width: 100%;
+            padding: 40px;
+        }
+        
+        h1 {
+            color: #333;
+            margin-bottom: 10px;
+            text-align: center;
+            font-size: 28px;
+        }
+        
+        .subtitle {
+            color: #666;
+            text-align: center;
+            margin-bottom: 30px;
+            font-size: 14px;
+        }
+        
+        .form-group {
+            margin-bottom: 20px;
+        }
+        
+        label {
+            display: block;
+            margin-bottom: 8px;
+            color: #333;
+            font-weight: 600;
+            font-size: 14px;
+        }
+        
+        input[type="text"],
+        input[type="file"],
+        textarea {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e0e0e0;
+            border-radius: 8px;
+            font-family: inherit;
+            font-size: 14px;
+            transition: border-color 0.3s;
+        }
+        
+        input[type="text"]:focus,
+        input[type="file"]:focus,
+        textarea:focus {
+            outline: none;
+            border-color: #667eea;
+            box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.1);
+        }
+        
+        textarea {
+            resize: vertical;
+            min-height: 80px;
+        }
+        
+        .photo-section {
+            text-align: center;
+            margin: 30px 0;
+            padding: 20px;
+            background: #f8f9fa;
+            border-radius: 8px;
+        }
+        
+        .photo-placeholder {
+            width: 150px;
+            height: 150px;
+            background: white;
+            border: 3px dashed #667eea;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 60px;
+            margin: 0 auto 15px;
+            transition: all 0.3s;
+        }
+        
+        .photo-placeholder.has-image {
+            border-style: solid;
+            border-color: #4caf50;
+        }
+        
+        .photo-preview {
+            max-width: 150px;
+            max-height: 150px;
+            border-radius: 8px;
+            border: 2px solid #667eea;
+            margin: 0 auto;
+            display: none;
+        }
+        
+        .button-group {
+            display: flex;
+            gap: 10px;
+            margin-top: 30px;
+        }
+        
+        button {
+            flex: 1;
+            padding: 14px;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .btn-save {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        
+        .btn-save:hover:not(:disabled) {
+            transform: translateY(-2px);
+            box-shadow: 0 10px 25px rgba(102, 126, 234, 0.4);
+        }
+        
+        .btn-save:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+            transform: none;
+        }
+        
+        .btn-clear {
+            background: #f0f0f0;
+            color: #333;
+            border: 2px solid #ddd;
+        }
+        
+        .btn-clear:hover {
+            background: #e0e0e0;
+        }
+        
+        .status {
+            margin-top: 20px;
+            padding: 15px;
+            border-radius: 8px;
+            display: none;
+            font-weight: 500;
+        }
+        
+        .status.success {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+            display: block;
+        }
+        
+        .status.error {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+            display: block;
+        }
+        
+        .status.info {
+            background: #d1ecf1;
+            color: #0c5460;
+            border: 1px solid #bee5eb;
+            display: block;
+        }
+        
+        .loading {
+            display: none;
+            text-align: center;
+            margin-top: 20px;
+        }
+        
+        .loading.active {
+            display: block;
+        }
+        
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #667eea;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 10px;
+        }
+        
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        
+        .info-box {
+            background: #e7f3ff;
+            border-left: 4px solid #2196F3;
+            padding: 12px;
+            margin-bottom: 20px;
+            border-radius: 5px;
+            font-size: 13px;
+            color: #0c5460;
+            line-height: 1.5;
+        }
+        
+        .success-icon {
+            font-size: 24px;
+            margin-bottom: 10px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>📸 Upload de Foto</h1>
+        <p class="subtitle">Teste a funcionalidade de upload de fotos</p>
+        
+        <div class="info-box">
+            ℹ️ Preencha os dados abaixo, selecione uma foto e clique em "Salvar" para testar o upload.
+        </div>
+        
+        <form id="testForm">
+            <div class="form-group">
+                <label for="nome">Nome *</label>
+                <input type="text" id="nome" name="nome" placeholder="Ex: João Silva" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="empresa">Empresa *</label>
+                <input type="text" id="empresa" name="empresa" placeholder="Ex: Empresa XYZ" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="funcao">Função *</label>
+                <input type="text" id="funcao" name="funcao" placeholder="Ex: Técnico de Segurança" required>
+            </div>
+            
+            <div class="form-group">
+                <label for="anotacoes">Anotações</label>
+                <textarea id="anotacoes" name="anotacoes" placeholder="Digite anotações (opcional)"></textarea>
+            </div>
+            
+            <div class="photo-section">
+                <label>Foto</label>
+                <div class="photo-placeholder" id="placeholder">👤</div>
+                <img id="preview" class="photo-preview">
+                <input type="file" id="foto" name="foto" accept="image/*" style="display: none;">
+                <button type="button" class="btn-clear" onclick="document.getElementById('foto').click()" style="margin-top: 10px;">
+                    📷 Selecionar Foto
+                </button>
+            </div>
+            
+            <div class="button-group">
+                <button type="submit" class="btn-save">💾 Salvar</button>
+                <button type="reset" class="btn-clear">🔄 Limpar</button>
+            </div>
+        </form>
+        
+        <div class="loading" id="loading">
+            <div class="spinner"></div>
+            <p>Enviando dados...</p>
+        </div>
+        
+        <div class="status" id="status"></div>
+    </div>
+    
+    <script>
+        const form = document.getElementById('testForm');
+        const fotoInput = document.getElementById('foto');
+        const preview = document.getElementById('preview');
+        const placeholder = document.getElementById('placeholder');
+        const statusDiv = document.getElementById('status');
+        const loading = document.getElementById('loading');
+        
+        // Preview da foto
+        fotoInput.addEventListener('change', (e) => {
+            const file = e.target.files[0];
+            if (file) {
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    preview.src = event.target.result;
+                    preview.style.display = 'block';
+                    placeholder.classList.add('has-image');
+                };
+                reader.readAsDataURL(file);
+            }
+        });
+        
+        // Limpar formulário
+        form.addEventListener('reset', () => {
+            preview.style.display = 'none';
+            placeholder.classList.remove('has-image');
+            statusDiv.classList.remove('success', 'error', 'info');
+        });
+        
+        // Enviar formulário
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            // Validar campos obrigatórios
+            const nome = document.getElementById('nome').value.trim();
+            const empresa = document.getElementById('empresa').value.trim();
+            const funcao = document.getElementById('funcao').value.trim();
+            
+            if (!nome || !empresa || !funcao) {
+                showStatus('❌ Por favor, preencha todos os campos obrigatórios', 'error');
+                return;
+            }
+            
+            // Mostrar loading
+            loading.classList.add('active');
+            statusDiv.classList.remove('success', 'error', 'info');
+            
+            try {
+                // Criar FormData
+                const formData = new FormData();
+                formData.append('nome', nome);
+                formData.append('empresa', empresa);
+                formData.append('funcao', funcao);
+                formData.append('vencimento', '2026-12-31');
+                formData.append('anotacoes', document.getElementById('anotacoes').value);
+                formData.append('situacao', 'S');
+                formData.append('ambientacao', 'N');
+                
+                // Adicionar foto se selecionada
+                if (fotoInput.files[0]) {
+                    formData.append('foto', fotoInput.files[0]);
+                    console.log('📸 Foto selecionada:', fotoInput.files[0].name);
+                }
+                
+                // Enviar para o servidor
+                console.log('📤 Enviando dados para o servidor...');
+                const response = await fetch('/api/ssma', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const data = await response.json();
+                console.log('📥 Resposta do servidor:', data);
+                
+                loading.classList.remove('active');
+                
+                if (response.ok) {
+                    const registroId = data.id;
+                    
+                    // Verificar se a foto foi salva
+                    console.log('🔍 Verificando se a foto foi salva...');
+                    const resVerifica = await fetch(`/api/ssma/${registroId}`);
+                    const dataVerifica = await resVerifica.json();
+                    
+                    if (dataVerifica.Foto) {
+                        showStatus(`✅ Sucesso! Registro #${registroId} criado com foto salva!`, 'success');
+                    } else if (fotoInput.files[0]) {
+                        showStatus(`⚠️ Registro #${registroId} criado, mas a foto NÃO foi salva!`, 'error');
+                    } else {
+                        showStatus(`✅ Registro #${registroId} criado com sucesso!`, 'success');
+                    }
+                    
+                    // Limpar formulário
+                    form.reset();
+                    preview.style.display = 'none';
+                    placeholder.classList.remove('has-image');
+                } else {
+                    showStatus(`❌ Erro: ${data.error || 'Erro ao salvar'}`, 'error');
+                }
+            } catch (error) {
+                loading.classList.remove('active');
+                console.error('❌ Erro:', error);
+                showStatus(`❌ Erro de conexão: ${error.message}`, 'error');
+            }
+        });
+        
+        function showStatus(message, type) {
+            statusDiv.textContent = message;
+            statusDiv.className = `status ${type}`;
+        }
+    </script>
+</body>
+</html>

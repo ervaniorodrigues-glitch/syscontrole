@@ -1,0 +1,264 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>SSMA - Login</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+        .login-container {
+            background: white;
+            border-radius: 10px;
+            box-shadow: 0 15px 35px rgba(0,0,0,0.3);
+            overflow: hidden;
+            width: 400px;
+            max-width: 90%;
+        }
+        .login-header {
+            background: #87CEEB;
+            color: #1a5276;
+            padding: 30px;
+            text-align: center;
+        }
+        .login-header h1 {
+            font-size: 48px;
+            font-weight: bold;
+            letter-spacing: 5px;
+        }
+        .login-header p {
+            margin-top: 5px;
+            font-size: 14px;
+            opacity: 0.8;
+        }
+        .login-form {
+            padding: 30px;
+        }
+        .form-group {
+            margin-bottom: 20px;
+        }
+        .form-group label {
+            display: block;
+            margin-bottom: 8px;
+            color: #333;
+            font-weight: 500;
+        }
+        .form-group input {
+            width: 100%;
+            padding: 12px 15px;
+            border: 2px solid #e0e0e0;
+            border-radius: 5px;
+            font-size: 16px;
+            transition: border-color 0.3s;
+        }
+        .form-group input:focus {
+            outline: none;
+            border-color: #87CEEB;
+        }
+        .btn-login {
+            width: 100%;
+            padding: 14px;
+            background: #87CEEB;
+            color: #1a5276;
+            border: none;
+            border-radius: 5px;
+            font-size: 16px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+        .btn-login:hover {
+            background: #5dade2;
+        }
+        .btn-login:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        .error-msg {
+            background: #ffebee;
+            color: #c62828;
+            padding: 10px;
+            border-radius: 5px;
+            margin-bottom: 15px;
+            text-align: center;
+            display: none;
+        }
+        .blocked-msg {
+            background: #fff3e0;
+            color: #e65100;
+            padding: 15px;
+            border-radius: 5px;
+            margin-bottom: 15px;
+            text-align: center;
+        }
+        .blocked-msg .timer {
+            font-size: 24px;
+            font-weight: bold;
+            margin-top: 10px;
+        }
+        .attempts {
+            text-align: center;
+            color: #666;
+            font-size: 12px;
+            margin-top: 15px;
+        }
+    </style>
+</head>
+<body>
+    <div class="login-container">
+        <div class="login-header">
+            <h1>SSMA</h1>
+            <p>Sistema de Segurança e Meio Ambiente</p>
+        </div>
+        <div class="login-form">
+            <div id="blockedMsg" class="blocked-msg" style="display: none;">
+                <strong>⚠️ Acesso Bloqueado</strong>
+                <p>Muitas tentativas incorretas.</p>
+                <p>Tente novamente em:</p>
+                <div class="timer" id="timerDisplay">00:00:00</div>
+            </div>
+            <div id="errorMsg" class="error-msg"></div>
+            <form id="loginForm">
+                <div class="form-group">
+                    <label for="login">Login</label>
+                    <input type="text" id="login" name="login" required autocomplete="off">
+                </div>
+                <div class="form-group">
+                    <label for="senha">Senha</label>
+                    <input type="password" id="senha" name="senha" required>
+                </div>
+                <button type="submit" class="btn-login" id="btnLogin">Entrar</button>
+            </form>
+            <div class="attempts" id="attemptsInfo"></div>
+        </div>
+    </div>
+
+    <script>
+        const BLOCK_TIME = 2 * 60 * 60 * 1000; // 2 horas em ms
+        const MAX_ATTEMPTS = 3;
+
+        function getBlockInfo() {
+            const info = localStorage.getItem('loginBlock');
+            return info ? JSON.parse(info) : { attempts: 0, blockedUntil: null };
+        }
+
+        function setBlockInfo(info) {
+            localStorage.setItem('loginBlock', JSON.stringify(info));
+        }
+
+        function formatTime(ms) {
+            const hours = Math.floor(ms / (1000 * 60 * 60));
+            const minutes = Math.floor((ms % (1000 * 60 * 60)) / (1000 * 60));
+            const seconds = Math.floor((ms % (1000 * 60)) / 1000);
+            return `${String(hours).padStart(2, '0')}:${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+        }
+
+        function checkBlocked() {
+            const info = getBlockInfo();
+            if (info.blockedUntil && Date.now() < info.blockedUntil) {
+                return true;
+            }
+            if (info.blockedUntil && Date.now() >= info.blockedUntil) {
+                setBlockInfo({ attempts: 0, blockedUntil: null });
+            }
+            return false;
+        }
+
+        function updateUI() {
+            const info = getBlockInfo();
+            const blocked = checkBlocked();
+            
+            document.getElementById('loginForm').style.display = blocked ? 'none' : 'block';
+            document.getElementById('blockedMsg').style.display = blocked ? 'block' : 'none';
+            document.getElementById('attemptsInfo').style.display = blocked ? 'none' : 'block';
+            
+            if (!blocked && info.attempts > 0) {
+                document.getElementById('attemptsInfo').textContent = `Tentativas restantes: ${MAX_ATTEMPTS - info.attempts}`;
+            } else if (!blocked) {
+                document.getElementById('attemptsInfo').textContent = '';
+            }
+        }
+
+        function startTimer() {
+            const info = getBlockInfo();
+            if (!info.blockedUntil) return;
+            
+            const interval = setInterval(() => {
+                const remaining = info.blockedUntil - Date.now();
+                if (remaining <= 0) {
+                    clearInterval(interval);
+                    setBlockInfo({ attempts: 0, blockedUntil: null });
+                    updateUI();
+                } else {
+                    document.getElementById('timerDisplay').textContent = formatTime(remaining);
+                }
+            }, 1000);
+        }
+
+        document.getElementById('loginForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            
+            if (checkBlocked()) return;
+            
+            const login = document.getElementById('login').value.trim();
+            const senha = document.getElementById('senha').value;
+            
+            try {
+                const response = await fetch('/api/auth/login', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ login, senha })
+                });
+                
+                const result = await response.json();
+                
+                if (result.success) {
+                    setBlockInfo({ attempts: 0, blockedUntil: null });
+                    sessionStorage.setItem('user', JSON.stringify(result.user));
+                    window.location.href = '/';
+                } else {
+                    const info = getBlockInfo();
+                    info.attempts++;
+                    
+                    if (info.attempts >= MAX_ATTEMPTS) {
+                        info.blockedUntil = Date.now() + BLOCK_TIME;
+                        setBlockInfo(info);
+                        updateUI();
+                        startTimer();
+                    } else {
+                        setBlockInfo(info);
+                        document.getElementById('errorMsg').textContent = result.message || 'Login ou senha incorretos';
+                        document.getElementById('errorMsg').style.display = 'block';
+                        updateUI();
+                    }
+                }
+            } catch (err) {
+                document.getElementById('errorMsg').textContent = 'Erro de conexão';
+                document.getElementById('errorMsg').style.display = 'block';
+            }
+        });
+
+        // Verificar se já está logado
+        if (sessionStorage.getItem('user')) {
+            window.location.href = '/';
+        }
+
+        // Inicializar
+        updateUI();
+        if (checkBlocked()) {
+            startTimer();
+        }
+    </script>
+</body>
+</html>
