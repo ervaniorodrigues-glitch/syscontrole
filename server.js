@@ -504,6 +504,15 @@ function initDatabase() {
         )
     `);
     
+    // Criar tabela habilitar_cursos
+    db.run(`
+        CREATE TABLE IF NOT EXISTS habilitar_cursos (
+            id ${idType},
+            curso TEXT NOT NULL,
+            habilitado TEXT DEFAULT 'S'
+        )
+    `);
+    
     // Adicionar coluna logo se não existir
     db.run(`ALTER TABLE configuracao_relatorio ADD COLUMN logo TEXT DEFAULT '/Logo-Hoss.jpg'`, (err) => {
         // Ignora erro se coluna já existe
