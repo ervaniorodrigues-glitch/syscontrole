@@ -3106,30 +3106,42 @@ app.post('/api/backup/restaurar', async (req, res) => {
         
         // Restaurar funcionários
         if (backup.dados.funcionarios && backup.dados.funcionarios.length > 0) {
-            // Colunas válidas da tabela SSMA
-            const colunasValidas = [
-                'Nome', 'Empresa', 'Funcao', 'Vencimento', 'Anotacoes', 'Situacao', 'Ambientacao',
-                'Nr06_DataEmissao', 'Nr06_Vencimento', 'Nr06_Status',
-                'Nr10_DataEmissao', 'Nr10_Vencimento', 'Nr10_Status',
-                'Nr11_DataEmissao', 'Nr11_Vencimento', 'Nr11_Status',
-                'Nr12_DataEmissao', 'Nr12_Vencimento', 'Nr12_Status',
-                'Nr17_DataEmissao', 'Nr17_Vencimento', 'Nr17_Status',
-                'Nr18_DataEmissao', 'Nr18_Vencimento', 'Nr18_Status',
-                'Nr20_DataEmissao', 'Nr20_Vencimento', 'Nr20_Status',
-                'Nr33_DataEmissao', 'Nr33_Vencimento', 'Nr33_Status',
-                'Nr34_DataEmissao', 'Nr34_Vencimento', 'Nr34_Status',
-                'Nr35_DataEmissao', 'Nr35_Vencimento', 'Nr35_Status',
-                'Epi_DataEmissao', 'epiVencimento', 'EpiStatus',
-                'Foto', 'Cadastro'
-            ];
+            // Mapeamento de colunas (backup -> tabela)
+            const mapeamentoColunas = {
+                'nome': 'Nome', 'Nome': 'Nome',
+                'empresa': 'Empresa', 'Empresa': 'Empresa',
+                'funcao': 'Funcao', 'Funcao': 'Funcao',
+                'vencimento': 'Vencimento', 'Vencimento': 'Vencimento',
+                'anotacoes': 'Anotacoes', 'Anotacoes': 'Anotacoes',
+                'situacao': 'Situacao', 'Situacao': 'Situacao',
+                'ambientacao': 'Ambientacao', 'Ambientacao': 'Ambientacao',
+                'Nr06_DataEmissao': 'Nr06_DataEmissao', 'nr06_dataemissao': 'Nr06_DataEmissao',
+                'Nr06_Vencimento': 'Nr06_Vencimento', 'nr06_vencimento': 'Nr06_Vencimento',
+                'Nr06_Status': 'Nr06_Status', 'nr06_status': 'Nr06_Status',
+                'Nr10_DataEmissao': 'Nr10_DataEmissao', 'nr10_dataemissao': 'Nr10_DataEmissao',
+                'Nr10_Vencimento': 'Nr10_Vencimento', 'nr10_vencimento': 'Nr10_Vencimento',
+                'Nr10_Status': 'Nr10_Status', 'nr10_status': 'Nr10_Status',
+                'Nr11_DataEmissao': 'Nr11_DataEmissao', 'Nr11_Vencimento': 'Nr11_Vencimento', 'Nr11_Status': 'Nr11_Status',
+                'Nr12_DataEmissao': 'Nr12_DataEmissao', 'Nr12_Vencimento': 'Nr12_Vencimento', 'Nr12_Status': 'Nr12_Status',
+                'Nr17_DataEmissao': 'Nr17_DataEmissao', 'Nr17_Vencimento': 'Nr17_Vencimento', 'Nr17_Status': 'Nr17_Status',
+                'Nr18_DataEmissao': 'Nr18_DataEmissao', 'Nr18_Vencimento': 'Nr18_Vencimento', 'Nr18_Status': 'Nr18_Status',
+                'Nr20_DataEmissao': 'Nr20_DataEmissao', 'Nr20_Vencimento': 'Nr20_Vencimento', 'Nr20_Status': 'Nr20_Status',
+                'Nr33_DataEmissao': 'Nr33_DataEmissao', 'Nr33_Vencimento': 'Nr33_Vencimento', 'Nr33_Status': 'Nr33_Status',
+                'Nr34_DataEmissao': 'Nr34_DataEmissao', 'Nr34_Vencimento': 'Nr34_Vencimento', 'Nr34_Status': 'Nr34_Status',
+                'Nr35_DataEmissao': 'Nr35_DataEmissao', 'Nr35_Vencimento': 'Nr35_Vencimento', 'Nr35_Status': 'Nr35_Status',
+                'Epi_DataEmissao': 'Epi_DataEmissao', 'epiVencimento': 'epiVencimento', 'EpiStatus': 'EpiStatus',
+                'Foto': 'Foto', 'foto': 'Foto',
+                'Cadastro': 'Cadastro', 'cadastro': 'Cadastro'
+            };
             
             for (const f of backup.dados.funcionarios) {
                 try {
-                    // Filtrar apenas colunas válidas
+                    // Mapear colunas do backup para colunas da tabela
                     const funcFiltrado = {};
-                    for (const col of colunasValidas) {
-                        if (f[col] !== undefined) {
-                            funcFiltrado[col] = f[col];
+                    for (const [colBackup, valor] of Object.entries(f)) {
+                        const colTabela = mapeamentoColunas[colBackup];
+                        if (colTabela && valor !== undefined && valor !== null) {
+                            funcFiltrado[colTabela] = valor;
                         }
                     }
                     
@@ -3137,11 +3149,12 @@ app.post('/api/backup/restaurar', async (req, res) => {
                     const valores = Object.values(funcFiltrado);
                     const placeholders = colunas.map(() => '?').join(', ');
                     
-                    if (colunas.length > 0) {
+                    if (colunas.length > 0 && funcFiltrado.Nome) {
                         await new Promise((resolve, reject) => {
                             db.run(`INSERT INTO SSMA (${colunas.join(', ')}) VALUES (${placeholders})`, valores, function(err) {
                                 if (err) {
-                                    erros.push('Funcionário ' + f.Nome + ': ' + err.message);
+                                    console.error('Erro funcionário:', f.Nome || f.nome, err.message);
+                                    erros.push('Funcionário ' + (f.Nome || f.nome) + ': ' + err.message);
                                 } else {
                                     restaurados.funcionarios++;
                                 }
@@ -3150,7 +3163,7 @@ app.post('/api/backup/restaurar', async (req, res) => {
                         });
                     }
                 } catch (e) {
-                    erros.push('Funcionário ' + f.Nome + ': ' + e.message);
+                    erros.push('Funcionário ' + (f.Nome || f.nome) + ': ' + e.message);
                 }
             }
         }
