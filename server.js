@@ -395,21 +395,22 @@ app.use((err, req, res, next) => {
 const storage = multer.memoryStorage();
 const upload = multer({ storage: storage });
 
-// Inicializar banco de dados
-if (!db._isPostgres) {
-    // SQLite - inicializar imediatamente
-    initDatabase();
-} else {
-    // PostgreSQL - inicializar após conexão
-    setTimeout(initDatabase, 1000);
-}
+// Verificar se é PostgreSQL
+const isPostgres = !!process.env.DATABASE_URL;
+
+// Inicializar banco de dados após um pequeno delay para garantir conexão
+setTimeout(initDatabase, isPostgres ? 2000 : 100);
 
 // Inicializar tabelas
 function initDatabase() {
+    const idType = isPostgres ? 'SERIAL PRIMARY KEY' : 'INTEGER PRIMARY KEY AUTOINCREMENT';
+    const blobType = isPostgres ? 'BYTEA' : 'BLOB';
+    const dateType = isPostgres ? 'TIMESTAMP' : 'DATETIME';
+    
     // Criar tabela SSMA
     db.run(`
         CREATE TABLE IF NOT EXISTS SSMA (
-            id ${db._isPostgres ? 'SERIAL PRIMARY KEY' : 'INTEGER PRIMARY KEY AUTOINCREMENT'},
+            id ${idType},
             Nome TEXT NOT NULL,
             Empresa TEXT NOT NULL,
             Funcao TEXT NOT NULL,
@@ -450,23 +451,23 @@ function initDatabase() {
             Epi_DataEmissao TEXT,
             epiVencimento TEXT,
             EpiStatus TEXT,
-            Foto ${db._isPostgres ? 'BYTEA' : 'BLOB'},
-            Cadastro ${db._isPostgres ? 'TIMESTAMP' : 'DATETIME'} DEFAULT CURRENT_TIMESTAMP
+            Foto ${blobType},
+            Cadastro ${dateType} DEFAULT CURRENT_TIMESTAMP
         )
     `);
     
     // Criar tabela FORNECEDOR
     db.run(`
         CREATE TABLE IF NOT EXISTS FORNECEDOR (
-            id ${db._isPostgres ? 'SERIAL PRIMARY KEY' : 'INTEGER PRIMARY KEY AUTOINCREMENT'},
+            id ${idType},
             Empresa TEXT NOT NULL,
             CNPJ TEXT,
             Telefone TEXT,
             Celular TEXT,
             Contato TEXT,
             Observacao TEXT,
-            DataCadastro ${db._isPostgres ? 'TIMESTAMP' : 'DATETIME'} DEFAULT CURRENT_TIMESTAMP,
-            DataInativacao ${db._isPostgres ? 'TIMESTAMP' : 'DATETIME'},
+            DataCadastro ${dateType} DEFAULT CURRENT_TIMESTAMP,
+            DataInativacao ${dateType},
             Situacao TEXT DEFAULT 'S'
         )
     `);
@@ -474,7 +475,7 @@ function initDatabase() {
     // Criar tabela DOCUMENTACAO
     db.run(`
         CREATE TABLE IF NOT EXISTS DOCUMENTACAO (
-            id ${db._isPostgres ? 'SERIAL PRIMARY KEY' : 'INTEGER PRIMARY KEY AUTOINCREMENT'},
+            id ${idType},
             empresa TEXT NOT NULL,
             cnpj TEXT NOT NULL,
             pgr_emissao TEXT,
@@ -488,15 +489,15 @@ function initDatabase() {
             pcmso_dias_corridos INTEGER,
             pcmso_dias_vencer INTEGER,
             ativo TEXT DEFAULT 'S',
-            DataCadastro ${db._isPostgres ? 'TIMESTAMP' : 'DATETIME'} DEFAULT CURRENT_TIMESTAMP,
-            DataAlteracao ${db._isPostgres ? 'TIMESTAMP' : 'DATETIME'} DEFAULT CURRENT_TIMESTAMP
+            DataCadastro ${dateType} DEFAULT CURRENT_TIMESTAMP,
+            DataAlteracao ${dateType} DEFAULT CURRENT_TIMESTAMP
         )
     `);
     
     // Criar tabela de configuração do relatório
     db.run(`
         CREATE TABLE IF NOT EXISTS configuracao_relatorio (
-            id ${db._isPostgres ? 'SERIAL PRIMARY KEY' : 'INTEGER PRIMARY KEY AUTOINCREMENT'},
+            id ${idType},
             titulo TEXT DEFAULT 'Relatório de Cursos',
             rodape TEXT DEFAULT 'SSMA',
             logo TEXT DEFAULT '/Logo-Hoss.jpg'
