@@ -407,52 +407,58 @@ function initDatabase() {
     const blobType = isPostgres ? 'BYTEA' : 'BLOB';
     const dateType = isPostgres ? 'TIMESTAMP' : 'DATETIME';
     
-    // Criar tabela SSMA
+    // Criar tabela SSMA - ESTRUTURA EXATA DO SQLITE
     db.run(`
         CREATE TABLE IF NOT EXISTS SSMA (
             id ${idType},
             Nome TEXT NOT NULL,
             Empresa TEXT NOT NULL,
             Funcao TEXT NOT NULL,
-            Vencimento TEXT,
-            Anotacoes TEXT,
+            Vencimento ${dateType},
+            Nr10_Vencimento ${dateType},
+            Nr11_Vencimento ${dateType},
+            NR12_Vencimento ${dateType},
+            Nr17_Vencimento ${dateType},
+            NR18_Vencimento ${dateType},
+            NR33_Vencimento ${dateType},
+            NR35_Vencimento ${dateType},
+            epiVencimento ${dateType},
+            Cadastro ${dateType} DEFAULT CURRENT_TIMESTAMP,
             Situacao TEXT DEFAULT 'S',
-            Ambientacao TEXT DEFAULT 'N',
-            Nr06_DataEmissao TEXT,
-            Nr06_Vencimento TEXT,
-            Nr06_Status TEXT,
-            Nr10_DataEmissao TEXT,
-            Nr10_Vencimento TEXT,
+            Foto ${blobType},
+            Status TEXT,
             Nr10_Status TEXT,
-            Nr11_DataEmissao TEXT,
-            Nr11_Vencimento TEXT,
             Nr11_Status TEXT,
-            Nr12_DataEmissao TEXT,
-            Nr12_Vencimento TEXT,
             Nr12_Status TEXT,
-            Nr17_DataEmissao TEXT,
-            Nr17_Vencimento TEXT,
             Nr17_Status TEXT,
-            Nr18_DataEmissao TEXT,
-            Nr18_Vencimento TEXT,
             Nr18_Status TEXT,
-            Nr20_DataEmissao TEXT,
+            Nr33_Status TEXT,
+            Nr35_Status TEXT,
+            EpiStatus TEXT,
+            Anotacoes TEXT,
+            Ambientacao TEXT DEFAULT 'N',
+            Nr10_DataEmissao TEXT,
+            CANCELADO TEXT DEFAULT 'N',
+            Nr11_DataEmissao TEXT,
+            Nr18_DataEmissao TEXT,
+            Nr33_DataEmissao TEXT,
+            Nr35_DataEmissao TEXT,
+            Epi_DataEmissao TEXT,
+            Epi_Status TEXT,
+            DataInativacao ${dateType},
+            Nr12_Ferramenta TEXT,
+            Nr17_DataEmissao TEXT,
+            Nr12_DataEmissao TEXT,
+            Nr06_DataEmissao TEXT,
             Nr20_Vencimento TEXT,
             Nr20_Status TEXT,
-            Nr33_DataEmissao TEXT,
-            Nr33_Vencimento TEXT,
-            Nr33_Status TEXT,
             Nr34_DataEmissao TEXT,
             Nr34_Vencimento TEXT,
             Nr34_Status TEXT,
-            Nr35_DataEmissao TEXT,
-            Nr35_Vencimento TEXT,
-            Nr35_Status TEXT,
-            Epi_DataEmissao TEXT,
-            epiVencimento TEXT,
-            EpiStatus TEXT,
-            Foto ${blobType},
-            Cadastro ${dateType} DEFAULT CURRENT_TIMESTAMP
+            Nr06_Vencimento TEXT,
+            Nr06_Status TEXT,
+            Nr20_DataEmissao TEXT,
+            fotoUrl TEXT
         )
     `);
     
@@ -504,12 +510,12 @@ function initDatabase() {
         )
     `);
     
-    // Criar tabela habilitar_cursos
+    // Criar tabela habilitar_cursos - ESTRUTURA EXATA DO SQLITE
     db.run(`
         CREATE TABLE IF NOT EXISTS habilitar_cursos (
             id ${idType},
             curso TEXT NOT NULL,
-            habilitado TEXT DEFAULT 'S'
+            habilitado INTEGER DEFAULT 1
         )
     `);
     
@@ -3115,42 +3121,30 @@ app.post('/api/backup/restaurar', async (req, res) => {
         
         // Restaurar funcionários
         if (backup.dados.funcionarios && backup.dados.funcionarios.length > 0) {
-            // Mapeamento de colunas (backup -> tabela)
-            const mapeamentoColunas = {
-                'nome': 'Nome', 'Nome': 'Nome',
-                'empresa': 'Empresa', 'Empresa': 'Empresa',
-                'funcao': 'Funcao', 'Funcao': 'Funcao',
-                'vencimento': 'Vencimento', 'Vencimento': 'Vencimento',
-                'anotacoes': 'Anotacoes', 'Anotacoes': 'Anotacoes',
-                'situacao': 'Situacao', 'Situacao': 'Situacao',
-                'ambientacao': 'Ambientacao', 'Ambientacao': 'Ambientacao',
-                'Nr06_DataEmissao': 'Nr06_DataEmissao', 'nr06_dataemissao': 'Nr06_DataEmissao',
-                'Nr06_Vencimento': 'Nr06_Vencimento', 'nr06_vencimento': 'Nr06_Vencimento',
-                'Nr06_Status': 'Nr06_Status', 'nr06_status': 'Nr06_Status',
-                'Nr10_DataEmissao': 'Nr10_DataEmissao', 'nr10_dataemissao': 'Nr10_DataEmissao',
-                'Nr10_Vencimento': 'Nr10_Vencimento', 'nr10_vencimento': 'Nr10_Vencimento',
-                'Nr10_Status': 'Nr10_Status', 'nr10_status': 'Nr10_Status',
-                'Nr11_DataEmissao': 'Nr11_DataEmissao', 'Nr11_Vencimento': 'Nr11_Vencimento', 'Nr11_Status': 'Nr11_Status',
-                'Nr12_DataEmissao': 'Nr12_DataEmissao', 'Nr12_Vencimento': 'Nr12_Vencimento', 'Nr12_Status': 'Nr12_Status',
-                'Nr17_DataEmissao': 'Nr17_DataEmissao', 'Nr17_Vencimento': 'Nr17_Vencimento', 'Nr17_Status': 'Nr17_Status',
-                'Nr18_DataEmissao': 'Nr18_DataEmissao', 'Nr18_Vencimento': 'Nr18_Vencimento', 'Nr18_Status': 'Nr18_Status',
-                'Nr20_DataEmissao': 'Nr20_DataEmissao', 'Nr20_Vencimento': 'Nr20_Vencimento', 'Nr20_Status': 'Nr20_Status',
-                'Nr33_DataEmissao': 'Nr33_DataEmissao', 'Nr33_Vencimento': 'Nr33_Vencimento', 'Nr33_Status': 'Nr33_Status',
-                'Nr34_DataEmissao': 'Nr34_DataEmissao', 'Nr34_Vencimento': 'Nr34_Vencimento', 'Nr34_Status': 'Nr34_Status',
-                'Nr35_DataEmissao': 'Nr35_DataEmissao', 'Nr35_Vencimento': 'Nr35_Vencimento', 'Nr35_Status': 'Nr35_Status',
-                'Epi_DataEmissao': 'Epi_DataEmissao', 'epiVencimento': 'epiVencimento', 'EpiStatus': 'EpiStatus',
-                'Foto': 'Foto', 'foto': 'Foto',
-                'Cadastro': 'Cadastro', 'cadastro': 'Cadastro'
-            };
+            // Todas as colunas válidas da tabela SSMA (exatamente como no SQLite)
+            const colunasValidas = [
+                'Nome', 'Empresa', 'Funcao', 'Vencimento', 'Nr10_Vencimento', 'Nr11_Vencimento',
+                'NR12_Vencimento', 'Nr17_Vencimento', 'NR18_Vencimento', 'NR33_Vencimento',
+                'NR35_Vencimento', 'epiVencimento', 'Cadastro', 'Situacao', 'Foto', 'Status',
+                'Nr10_Status', 'Nr11_Status', 'Nr12_Status', 'Nr17_Status', 'Nr18_Status',
+                'Nr33_Status', 'Nr35_Status', 'EpiStatus', 'Anotacoes', 'Ambientacao',
+                'Nr10_DataEmissao', 'CANCELADO', 'Nr11_DataEmissao', 'Nr18_DataEmissao',
+                'Nr33_DataEmissao', 'Nr35_DataEmissao', 'Epi_DataEmissao', 'Epi_Status',
+                'DataInativacao', 'Nr12_Ferramenta', 'Nr17_DataEmissao', 'Nr12_DataEmissao',
+                'Nr06_DataEmissao', 'Nr20_Vencimento', 'Nr20_Status', 'Nr34_DataEmissao',
+                'Nr34_Vencimento', 'Nr34_Status', 'Nr06_Vencimento', 'Nr06_Status',
+                'Nr20_DataEmissao', 'fotoUrl'
+            ];
             
             for (const f of backup.dados.funcionarios) {
                 try {
-                    // Mapear colunas do backup para colunas da tabela
+                    // Filtrar apenas colunas válidas
                     const funcFiltrado = {};
-                    for (const [colBackup, valor] of Object.entries(f)) {
-                        const colTabela = mapeamentoColunas[colBackup];
-                        if (colTabela && valor !== undefined && valor !== null) {
-                            funcFiltrado[colTabela] = valor;
+                    for (const [coluna, valor] of Object.entries(f)) {
+                        // Verificar se a coluna existe (case-insensitive)
+                        const colunaValida = colunasValidas.find(c => c.toLowerCase() === coluna.toLowerCase());
+                        if (colunaValida && valor !== undefined && valor !== null && coluna.toLowerCase() !== 'id') {
+                            funcFiltrado[colunaValida] = valor;
                         }
                     }
                     
@@ -3159,11 +3153,11 @@ app.post('/api/backup/restaurar', async (req, res) => {
                     const placeholders = colunas.map(() => '?').join(', ');
                     
                     if (colunas.length > 0 && funcFiltrado.Nome) {
-                        await new Promise((resolve, reject) => {
+                        await new Promise((resolve) => {
                             db.run(`INSERT INTO SSMA (${colunas.join(', ')}) VALUES (${placeholders})`, valores, function(err) {
                                 if (err) {
-                                    console.error('Erro funcionário:', f.Nome || f.nome, err.message);
-                                    erros.push('Funcionário ' + (f.Nome || f.nome) + ': ' + err.message);
+                                    console.error('Erro funcionário:', funcFiltrado.Nome, err.message);
+                                    erros.push('Funcionário ' + funcFiltrado.Nome + ': ' + err.message);
                                 } else {
                                     restaurados.funcionarios++;
                                 }
@@ -3172,7 +3166,7 @@ app.post('/api/backup/restaurar', async (req, res) => {
                         });
                     }
                 } catch (e) {
-                    erros.push('Funcionário ' + (f.Nome || f.nome) + ': ' + e.message);
+                    erros.push('Funcionário: ' + e.message);
                 }
             }
         }
