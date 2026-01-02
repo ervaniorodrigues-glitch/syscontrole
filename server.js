@@ -3332,11 +3332,10 @@ app.delete('/api/backup/zerar/presenca', (req, res) => {
     }
 });
 
-// Iniciar servidor (0.0.0.0 permite conexões de qualquer IP na rede)
-app.listen(PORT, '0.0.0.0', () => {
+// Iniciar servidor
+app.listen(PORT, () => {
     console.log(`🚀 SysControle Web rodando em http://localhost:${PORT}`);
     console.log(`📊 Sistema idêntico ao desktop, mas na web!`);
-    console.log(`🌐 Acesso na rede: http://SEU_IP:${PORT}`);
 });
 
 // Graceful shutdown
