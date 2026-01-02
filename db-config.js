@@ -102,6 +102,30 @@ if (DATABASE_URL) {
             // Converter BLOB para BYTEA
             pgSql = pgSql.replace(/\bBLOB\b/gi, 'BYTEA');
             
+            // Adicionar aspas duplas em colunas com maiúsculas (case-sensitive no PostgreSQL)
+            const colunas = [
+                'Nome', 'Empresa', 'Funcao', 'Vencimento', 'Situacao', 'Foto', 'Status',
+                'Anotacoes', 'Ambientacao', 'Cadastro', 'DataInativacao', 'CANCELADO',
+                'Nr06_DataEmissao', 'Nr06_Vencimento', 'Nr06_Status',
+                'Nr10_DataEmissao', 'Nr10_Vencimento', 'Nr10_Status',
+                'Nr11_DataEmissao', 'Nr11_Vencimento', 'Nr11_Status',
+                'Nr12_DataEmissao', 'NR12_Vencimento', 'Nr12_Status', 'Nr12_Ferramenta',
+                'Nr17_DataEmissao', 'Nr17_Vencimento', 'Nr17_Status',
+                'Nr18_DataEmissao', 'NR18_Vencimento', 'Nr18_Status',
+                'Nr20_DataEmissao', 'Nr20_Vencimento', 'Nr20_Status',
+                'Nr33_DataEmissao', 'NR33_Vencimento', 'Nr33_Status',
+                'Nr34_DataEmissao', 'Nr34_Vencimento', 'Nr34_Status',
+                'Nr35_DataEmissao', 'NR35_Vencimento', 'Nr35_Status',
+                'Epi_DataEmissao', 'epiVencimento', 'EpiStatus', 'Epi_Status',
+                'CNPJ', 'Telefone', 'Celular', 'Contato', 'Observacao', 'DataCadastro', 'DataAlteracao'
+            ];
+            
+            colunas.forEach(col => {
+                // Adicionar aspas apenas se não estiver já entre aspas
+                const regex = new RegExp(`\\b${col}\\b(?!")`, 'g');
+                pgSql = pgSql.replace(regex, `"${col}"`);
+            });
+            
             return pgSql;
         }
     };
