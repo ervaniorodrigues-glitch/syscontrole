@@ -8,6 +8,11 @@
 // Use server.js (SQLite) para desenvolvimento local.
 // ============================================
 
+console.log('🚀🚀🚀 INICIANDO SERVER-POSTGRES.JS 🚀🚀🚀');
+console.log('📍 Arquivo: server-postgres.js');
+console.log('🐘 Banco: PostgreSQL');
+console.log('🌐 DATABASE_URL existe?', !!process.env.DATABASE_URL);
+
 const express = require('express');
 const { Pool } = require('pg');
 const cors = require('cors');
