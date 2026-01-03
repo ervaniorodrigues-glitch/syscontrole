@@ -1,4 +1,5 @@
 const express = require('express');
+const sqlite3 = require('sqlite3').verbose();
 const cors = require('cors');
 const multer = require('multer');
 const path = require('path');
@@ -6,11 +7,13 @@ const XLSX = require('xlsx');
 const ExcelJS = require('exceljs');
 const fs = require('fs');
 
-// Importar configuração do banco (SQLite local ou PostgreSQL no Render)
-const db = require('./db-config');
-
 const app = express();
 const PORT = process.env.PORT || 3000;
+
+// Configurar middlewares
+app.use(cors());
+app.use(express.json({ limit: '300mb' })); // Aumentar limite para aceitar backups grandes com fotos
+app.use(express.urlencoded({ limit: '300mb', extended: true }));
 
 // ============ CONTROLE DE PRESENÇA EM MEMÓRIA ============
 // Estrutura: { mesAno: { funcionarioId: { dia: status } } }
@@ -84,14 +87,28 @@ function getUltimoDiaDoMes(ano, mes) {
     return new Date(ano, mes, 0).getDate();
 }
 
-function verificarResetMes() {
+async function verificarResetMes() {
     const mesAnoAtual = getMesAnoAtual();
-    if (presencaMesAtual !== mesAnoAtual) {
-        console.log(`🔄 Novo mês detectado: ${mesAnoAtual}. Resetando dados de presença.`);
+    if (presencaMesAtual !== mesAnoAtual && presencaMesAtual) {
+        console.log(`🔄 Novo mês detectado: ${mesAnoAtual}`);
+        console.log(`📦 FAZENDO BACKUP DO MÊS ANTERIOR (${presencaMesAtual}) ANTES DE ZERAR...`);
+        
+        // FAZER BACKUP DO MÊS ANTERIOR ANTES DE ZERAR
+        try {
+            await gerarBackupPresenca(presencaMesAtual);
+            console.log(`✅ Backup do mês ${presencaMesAtual} concluído com sucesso!`);
+        } catch (err) {
+            console.error(`❌ ERRO ao fazer backup do mês ${presencaMesAtual}:`, err);
+        }
+        
+        // AGORA SIM, ZERAR PARA O NOVO MÊS
+        console.log(`🗑️ Zerando dados de presença para iniciar ${mesAnoAtual}...`);
         presencaMemoria = {};
         comentariosPresenca = {};
+        ocorrenciasPresenca = {};
         presencaMesAtual = mesAnoAtual;
-        salvarDadosPresenca(); // Salvar após reset
+        salvarDadosPresenca();
+        console.log(`✅ Sistema pronto para ${mesAnoAtual}`);
     }
 }
 
@@ -238,8 +255,8 @@ setTimeout(verificarBackupAutomatico, 5000);
 
 // Middleware
 app.use(cors());
-app.use(express.json({ limit: '200mb' }));
-app.use(express.urlencoded({ extended: true, limit: '200mb' }));
+app.use(express.json({ limit: '50mb' }));
+app.use(express.urlencoded({ extended: true, limit: '50mb' }));
 
 // ============ SISTEMA DE AUTENTICAÇÃO ============
 // Arquivo de usuários
@@ -395,85 +412,79 @@ app.use((err, req, res, next) => {
 const storage = multer.memoryStorage();
 const upload = multer({ storage: storage });
 
-// Verificar se é PostgreSQL
-const isPostgres = !!process.env.DATABASE_URL;
-
-// Inicializar banco de dados após um pequeno delay para garantir conexão
-setTimeout(initDatabase, isPostgres ? 2000 : 100);
+// Conectar ao banco SQLite
+const db = new sqlite3.Database('./syscontrole.db', (err) => {
+    if (err) {
+        console.error('Erro ao conectar com o banco:', err.message);
+    } else {
+        console.log('Conectado ao banco SQLite');
+        initDatabase();
+    }
+});
 
 // Inicializar tabelas
 function initDatabase() {
-    const idType = isPostgres ? 'SERIAL PRIMARY KEY' : 'INTEGER PRIMARY KEY AUTOINCREMENT';
-    const blobType = isPostgres ? 'BYTEA' : 'BLOB';
-    const dateType = isPostgres ? 'TIMESTAMP' : 'DATETIME';
-    
-    // Criar tabela SSMA - ESTRUTURA EXATA DO SQLITE
+    // Criar tabela SSMA com EXATAMENTE as colunas que o frontend envia
     db.run(`
         CREATE TABLE IF NOT EXISTS SSMA (
-            id ${idType},
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
             Nome TEXT NOT NULL,
             Empresa TEXT NOT NULL,
             Funcao TEXT NOT NULL,
-            Vencimento ${dateType},
-            Nr10_Vencimento ${dateType},
-            Nr11_Vencimento ${dateType},
-            NR12_Vencimento ${dateType},
-            Nr17_Vencimento ${dateType},
-            NR18_Vencimento ${dateType},
-            NR33_Vencimento ${dateType},
-            NR35_Vencimento ${dateType},
-            epiVencimento ${dateType},
-            Cadastro ${dateType} DEFAULT CURRENT_TIMESTAMP,
-            Situacao TEXT DEFAULT 'S',
-            Foto ${blobType},
-            Status TEXT,
-            Nr10_Status TEXT,
-            Nr11_Status TEXT,
-            Nr12_Status TEXT,
-            Nr17_Status TEXT,
-            Nr18_Status TEXT,
-            Nr33_Status TEXT,
-            Nr35_Status TEXT,
-            EpiStatus TEXT,
+            Vencimento TEXT,
             Anotacoes TEXT,
+            Situacao TEXT DEFAULT 'S',
             Ambientacao TEXT DEFAULT 'N',
-            Nr10_DataEmissao TEXT,
-            CANCELADO TEXT DEFAULT 'N',
-            Nr11_DataEmissao TEXT,
-            Nr18_DataEmissao TEXT,
-            Nr33_DataEmissao TEXT,
-            Nr35_DataEmissao TEXT,
-            Epi_DataEmissao TEXT,
-            Epi_Status TEXT,
-            DataInativacao ${dateType},
-            Nr12_Ferramenta TEXT,
-            Nr17_DataEmissao TEXT,
-            Nr12_DataEmissao TEXT,
             Nr06_DataEmissao TEXT,
+            Nr06_Vencimento TEXT,
+            Nr06_Status TEXT,
+            Nr10_DataEmissao TEXT,
+            Nr10_Vencimento TEXT,
+            Nr10_Status TEXT,
+            Nr11_DataEmissao TEXT,
+            Nr11_Vencimento TEXT,
+            Nr11_Status TEXT,
+            Nr12_DataEmissao TEXT,
+            Nr12_Vencimento TEXT,
+            Nr12_Status TEXT,
+            Nr17_DataEmissao TEXT,
+            Nr17_Vencimento TEXT,
+            Nr17_Status TEXT,
+            Nr18_DataEmissao TEXT,
+            Nr18_Vencimento TEXT,
+            Nr18_Status TEXT,
+            Nr20_DataEmissao TEXT,
             Nr20_Vencimento TEXT,
             Nr20_Status TEXT,
+            Nr33_DataEmissao TEXT,
+            Nr33_Vencimento TEXT,
+            Nr33_Status TEXT,
             Nr34_DataEmissao TEXT,
             Nr34_Vencimento TEXT,
             Nr34_Status TEXT,
-            Nr06_Vencimento TEXT,
-            Nr06_Status TEXT,
-            Nr20_DataEmissao TEXT,
-            fotoUrl TEXT
+            Nr35_DataEmissao TEXT,
+            Nr35_Vencimento TEXT,
+            Nr35_Status TEXT,
+            Epi_DataEmissao TEXT,
+            epiVencimento TEXT,
+            EpiStatus TEXT,
+            Foto BLOB,
+            Cadastro DATETIME DEFAULT CURRENT_TIMESTAMP
         )
     `);
     
     // Criar tabela FORNECEDOR
     db.run(`
         CREATE TABLE IF NOT EXISTS FORNECEDOR (
-            id ${idType},
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
             Empresa TEXT NOT NULL,
             CNPJ TEXT,
             Telefone TEXT,
             Celular TEXT,
             Contato TEXT,
             Observacao TEXT,
-            DataCadastro ${dateType} DEFAULT CURRENT_TIMESTAMP,
-            DataInativacao ${dateType},
+            DataCadastro DATETIME DEFAULT CURRENT_TIMESTAMP,
+            DataInativacao DATETIME,
             Situacao TEXT DEFAULT 'S'
         )
     `);
@@ -481,7 +492,7 @@ function initDatabase() {
     // Criar tabela DOCUMENTACAO
     db.run(`
         CREATE TABLE IF NOT EXISTS DOCUMENTACAO (
-            id ${idType},
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
             empresa TEXT NOT NULL,
             cnpj TEXT NOT NULL,
             pgr_emissao TEXT,
@@ -495,27 +506,18 @@ function initDatabase() {
             pcmso_dias_corridos INTEGER,
             pcmso_dias_vencer INTEGER,
             ativo TEXT DEFAULT 'S',
-            DataCadastro ${dateType} DEFAULT CURRENT_TIMESTAMP,
-            DataAlteracao ${dateType} DEFAULT CURRENT_TIMESTAMP
+            DataCadastro DATETIME DEFAULT CURRENT_TIMESTAMP,
+            DataAlteracao DATETIME DEFAULT CURRENT_TIMESTAMP
         )
     `);
     
     // Criar tabela de configuração do relatório
     db.run(`
         CREATE TABLE IF NOT EXISTS configuracao_relatorio (
-            id ${idType},
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
             titulo TEXT DEFAULT 'Relatório de Cursos',
             rodape TEXT DEFAULT 'SSMA',
             logo TEXT DEFAULT '/Logo-Hoss.jpg'
-        )
-    `);
-    
-    // Criar tabela habilitar_cursos - ESTRUTURA EXATA DO SQLITE
-    db.run(`
-        CREATE TABLE IF NOT EXISTS habilitar_cursos (
-            id ${idType},
-            curso TEXT NOT NULL,
-            habilitado INTEGER DEFAULT 1
         )
     `);
     
@@ -1047,6 +1049,46 @@ app.get('/api/foto/:id', (req, res) => {
         res.set('Content-Type', 'image/jpeg');
         res.send(row.Foto);
     });
+});
+
+// ==================== ROTAS DE CONTAGEM ====================
+// IMPORTANTE: Estas rotas devem vir ANTES de /api/ssma/:id
+// para evitar que "count" seja interpretado como um ID
+
+app.get('/api/ssma/count', (req, res) => {
+    db.get('SELECT COUNT(*) as total FROM SSMA', (err, row) => {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json({ total: row.total });
+    });
+});
+
+app.get('/api/fornecedores/count', (req, res) => {
+    db.get('SELECT COUNT(*) as total FROM FORNECEDOR', (err, row) => {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json({ total: row.total });
+    });
+});
+
+app.get('/api/documentacao/count', (req, res) => {
+    db.get('SELECT COUNT(*) as total FROM DOCUMENTACAO', (err, row) => {
+        if (err) return res.status(500).json({ error: err.message });
+        res.json({ total: row.total });
+    });
+});
+
+app.get('/api/presenca/count', (req, res) => {
+    try {
+        // Contar total de registros de presença em memória
+        let total = 0;
+        for (const mesAno in presencaMemoria) {
+            for (const funcId in presencaMemoria[mesAno]) {
+                total += Object.keys(presencaMemoria[mesAno][funcId]).length;
+            }
+        }
+        res.json({ total: total });
+    } catch (err) {
+        res.status(500).json({ error: err.message });
+    }
 });
 
 // GET - Buscar registro específico
@@ -2980,42 +3022,7 @@ app.post('/api/controle-presenca/exportar', async (req, res) => {
 
 // ==================== ROTAS DE BACKUP E MANUTENÇÃO ====================
 
-// Contagem de registros
-app.get('/api/ssma/count', (req, res) => {
-    db.get('SELECT COUNT(*) as total FROM SSMA', (err, row) => {
-        if (err) return res.status(500).json({ error: err.message });
-        res.json({ total: row.total });
-    });
-});
-
-app.get('/api/fornecedores/count', (req, res) => {
-    db.get('SELECT COUNT(*) as total FROM FORNECEDOR', (err, row) => {
-        if (err) return res.status(500).json({ error: err.message });
-        res.json({ total: row.total });
-    });
-});
-
-app.get('/api/documentacao/count', (req, res) => {
-    db.get('SELECT COUNT(*) as total FROM DOCUMENTACAO', (err, row) => {
-        if (err) return res.status(500).json({ error: err.message });
-        res.json({ total: row.total });
-    });
-});
-
-app.get('/api/presenca/count', (req, res) => {
-    try {
-        // Contar total de registros de presença em memória
-        let total = 0;
-        for (const mesAno in presencaMemoria) {
-            for (const funcId in presencaMemoria[mesAno]) {
-                total += Object.keys(presencaMemoria[mesAno][funcId]).length;
-            }
-        }
-        res.json({ total: total });
-    } catch (err) {
-        res.status(500).json({ error: err.message });
-    }
-});
+// ==================== ROTAS DE BACKUP E MANUTENÇÃO ====================
 
 // Exportar backup completo
 app.get('/api/backup/exportar', (req, res) => {
@@ -3031,7 +3038,22 @@ app.get('/api/backup/exportar', (req, res) => {
             console.error('Erro ao buscar funcionários:', err);
             return res.status(500).json({ error: 'Erro ao buscar funcionários: ' + err.message });
         }
-        backup.dados.funcionarios = funcionarios || [];
+        
+        // CONVERTER FOTOS (BLOB) PARA BASE64 PARA SALVAR NO JSON
+        backup.dados.funcionarios = (funcionarios || []).map(f => {
+            const func = { ...f };
+            if (func.Foto) {
+                // Se é Buffer, converter para base64
+                if (Buffer.isBuffer(func.Foto)) {
+                    func.Foto = func.Foto.toString('base64');
+                }
+                // Se é objeto {type: 'Buffer', data: [...]}, converter
+                else if (func.Foto.type === 'Buffer' && Array.isArray(func.Foto.data)) {
+                    func.Foto = Buffer.from(func.Foto.data).toString('base64');
+                }
+            }
+            return func;
+        });
         
         // Buscar fornecedores (tabela FORNECEDOR)
         db.all('SELECT * FROM FORNECEDOR', (err, fornecedores) => {
@@ -3061,11 +3083,20 @@ app.get('/api/backup/exportar', (req, res) => {
                         }
                         backup.dados.cursosHabilitados = cursos || [];
                         
+                        // INCLUIR DADOS DE PRESENÇA NO BACKUP
+                        backup.dados.presenca = {
+                            presencaMemoria: presencaMemoria,
+                            comentariosPresenca: comentariosPresenca,
+                            ocorrenciasPresenca: ocorrenciasPresenca,
+                            presencaMesAtual: presencaMesAtual
+                        };
+                        
                         console.log('✅ Backup gerado com sucesso:', {
                             funcionarios: backup.dados.funcionarios.length,
                             fornecedores: backup.dados.fornecedores.length,
                             documentacao: backup.dados.documentacao.length,
-                            cursosHabilitados: backup.dados.cursosHabilitados.length
+                            cursosHabilitados: backup.dados.cursosHabilitados.length,
+                            presenca: backup.dados.presenca ? 'INCLUÍDO' : 'NÃO'
                         });
                         
                         res.json(backup);
@@ -3076,241 +3107,243 @@ app.get('/api/backup/exportar', (req, res) => {
     });
 });
 
-// Restaurar backup - VERSÃO COMPATÍVEL COM SQLITE E POSTGRESQL
+// Restaurar backup - VERSÃO ROBUSTA COM PROMISES
 app.post('/api/backup/restaurar', async (req, res) => {
+    console.log('📥 Recebendo requisição de restauração...');
+    console.log('   Content-Type:', req.headers['content-type']);
+    console.log('   Content-Length:', req.headers['content-length']);
+    
     const backup = req.body;
     
-    if (!backup || !backup.dados) {
-        return res.status(400).json({ success: false, error: 'Arquivo de backup inválido' });
+    if (!backup) {
+        console.log('❌ Backup vazio ou undefined');
+        return res.status(400).json({ success: false, error: 'Nenhum dado de backup recebido' });
+    }
+    
+    if (!backup.dados) {
+        console.log('❌ Backup sem propriedade "dados"');
+        console.log('   Chaves recebidas:', Object.keys(backup));
+        return res.status(400).json({ success: false, error: 'Arquivo de backup inválido - falta propriedade "dados"' });
     }
     
     console.log('🔄 Iniciando restauração de backup...');
     console.log('   Funcionários:', backup.dados.funcionarios?.length || 0);
     console.log('   Fornecedores:', backup.dados.fornecedores?.length || 0);
     console.log('   Documentação:', backup.dados.documentacao?.length || 0);
+    console.log('   Presença:', backup.dados.presenca ? 'SIM' : 'NÃO');
     
     let erros = [];
-    let restaurados = { funcionarios: 0, fornecedores: 0, documentacao: 0 };
+    let restaurados = { funcionarios: 0, fornecedores: 0, documentacao: 0, presenca: false };
     
     try {
-        // Limpar tabelas existentes
+        // Limpar tabelas
         await new Promise((resolve, reject) => {
-            db.run('DELETE FROM SSMA', [], (err) => err ? reject(err) : resolve());
-        });
-        await new Promise((resolve, reject) => {
-            db.run('DELETE FROM FORNECEDOR', [], (err) => err ? reject(err) : resolve());
-        });
-        await new Promise((resolve, reject) => {
-            db.run('DELETE FROM DOCUMENTACAO', [], (err) => err ? reject(err) : resolve());
+            db.serialize(() => {
+                db.run('DELETE FROM SSMA');
+                db.run('DELETE FROM FORNECEDOR');
+                db.run('DELETE FROM DOCUMENTACAO');
+                db.run("DELETE FROM sqlite_sequence WHERE name='SSMA'");
+                db.run("DELETE FROM sqlite_sequence WHERE name='FORNECEDOR'");
+                db.run("DELETE FROM sqlite_sequence WHERE name='DOCUMENTACAO'", resolve);
+            });
         });
         
-        // Resetar sequences (só funciona no SQLite, ignora erro no PostgreSQL)
-        try {
-            await new Promise((resolve) => {
-                db.run("DELETE FROM sqlite_sequence WHERE name='SSMA'", [], () => resolve());
-            });
-            await new Promise((resolve) => {
-                db.run("DELETE FROM sqlite_sequence WHERE name='FORNECEDOR'", [], () => resolve());
-            });
-            await new Promise((resolve) => {
-                db.run("DELETE FROM sqlite_sequence WHERE name='DOCUMENTACAO'", [], () => resolve());
-            });
-        } catch (e) {
-            // Ignora erro no PostgreSQL
-        }
+        console.log('✅ Tabelas limpas');
         
         // Restaurar funcionários
         if (backup.dados.funcionarios && backup.dados.funcionarios.length > 0) {
-            // Todas as colunas válidas da tabela SSMA (exatamente como no SQLite)
-            const colunasValidas = [
-                'Nome', 'Empresa', 'Funcao', 'Vencimento', 'Nr10_Vencimento', 'Nr11_Vencimento',
-                'NR12_Vencimento', 'Nr17_Vencimento', 'NR18_Vencimento', 'NR33_Vencimento',
-                'NR35_Vencimento', 'epiVencimento', 'Cadastro', 'Situacao', 'Foto', 'Status',
-                'Nr10_Status', 'Nr11_Status', 'Nr12_Status', 'Nr17_Status', 'Nr18_Status',
-                'Nr33_Status', 'Nr35_Status', 'EpiStatus', 'Anotacoes', 'Ambientacao',
-                'Nr10_DataEmissao', 'CANCELADO', 'Nr11_DataEmissao', 'Nr18_DataEmissao',
-                'Nr33_DataEmissao', 'Nr35_DataEmissao', 'Epi_DataEmissao', 'Epi_Status',
-                'DataInativacao', 'Nr12_Ferramenta', 'Nr17_DataEmissao', 'Nr12_DataEmissao',
-                'Nr06_DataEmissao', 'Nr20_Vencimento', 'Nr20_Status', 'Nr34_DataEmissao',
-                'Nr34_Vencimento', 'Nr34_Status', 'Nr06_Vencimento', 'Nr06_Status',
-                'Nr20_DataEmissao', 'fotoUrl'
-            ];
-            
             for (const f of backup.dados.funcionarios) {
                 try {
-                    // Filtrar apenas colunas válidas
-                    const funcFiltrado = {};
-                    for (const [coluna, valor] of Object.entries(f)) {
-                        // Verificar se a coluna existe (case-insensitive)
-                        const colunaValida = colunasValidas.find(c => c.toLowerCase() === coluna.toLowerCase());
-                        if (colunaValida && valor !== undefined && valor !== null && coluna.toLowerCase() !== 'id') {
-                            funcFiltrado[colunaValida] = valor;
+                    const funcionario = { ...f };
+                    
+                    // Converter foto
+                    if (funcionario.Foto) {
+                        if (typeof funcionario.Foto === 'string') {
+                            funcionario.Foto = Buffer.from(funcionario.Foto, 'base64');
+                        } else if (funcionario.Foto.type === 'Buffer' && Array.isArray(funcionario.Foto.data)) {
+                            funcionario.Foto = Buffer.from(funcionario.Foto.data);
                         }
                     }
                     
-                    const colunas = Object.keys(funcFiltrado);
-                    const valores = Object.values(funcFiltrado);
+                    const colunas = Object.keys(funcionario);
+                    const valores = Object.values(funcionario);
                     const placeholders = colunas.map(() => '?').join(', ');
                     
-                    if (colunas.length > 0 && funcFiltrado.Nome) {
-                        await new Promise((resolve) => {
-                            db.run(`INSERT INTO SSMA (${colunas.join(', ')}) VALUES (${placeholders})`, valores, function(err) {
-                                if (err) {
-                                    console.error('Erro funcionário:', funcFiltrado.Nome, err.message);
-                                    erros.push('Funcionário ' + funcFiltrado.Nome + ': ' + err.message);
-                                } else {
-                                    restaurados.funcionarios++;
-                                }
+                    await new Promise((resolve, reject) => {
+                        db.run(`INSERT INTO SSMA (${colunas.join(', ')}) VALUES (${placeholders})`, valores, function(err) {
+                            if (err) reject(err);
+                            else {
+                                restaurados.funcionarios++;
                                 resolve();
-                            });
+                            }
                         });
-                    }
-                } catch (e) {
-                    erros.push('Funcionário: ' + e.message);
+                    });
+                } catch (err) {
+                    erros.push('Funcionário ' + f.Nome + ': ' + err.message);
                 }
             }
         }
+        
+        console.log('✅ Funcionários restaurados:', restaurados.funcionarios);
         
         // Restaurar fornecedores
         if (backup.dados.fornecedores && backup.dados.fornecedores.length > 0) {
             for (const f of backup.dados.fornecedores) {
                 try {
-                    const fornCopy = { ...f };
-                    delete fornCopy.id;
-                    
-                    const colunas = Object.keys(fornCopy);
-                    const valores = Object.values(fornCopy);
+                    const colunas = Object.keys(f);
+                    const valores = Object.values(f);
                     const placeholders = colunas.map(() => '?').join(', ');
                     
                     await new Promise((resolve, reject) => {
                         db.run(`INSERT INTO FORNECEDOR (${colunas.join(', ')}) VALUES (${placeholders})`, valores, function(err) {
-                            if (err) {
-                                erros.push('Fornecedor ' + f.Empresa + ': ' + err.message);
-                            } else {
+                            if (err) reject(err);
+                            else {
                                 restaurados.fornecedores++;
+                                resolve();
                             }
-                            resolve();
                         });
                     });
-                } catch (e) {
-                    erros.push('Fornecedor ' + f.Empresa + ': ' + e.message);
+                } catch (err) {
+                    erros.push('Fornecedor ' + f.Empresa + ': ' + err.message);
                 }
             }
         }
+        
+        console.log('✅ Fornecedores restaurados:', restaurados.fornecedores);
         
         // Restaurar documentação
         if (backup.dados.documentacao && backup.dados.documentacao.length > 0) {
             for (const d of backup.dados.documentacao) {
                 try {
-                    const docCopy = { ...d };
-                    delete docCopy.id;
-                    
-                    const colunas = Object.keys(docCopy);
-                    const valores = Object.values(docCopy);
+                    const colunas = Object.keys(d);
+                    const valores = Object.values(d);
                     const placeholders = colunas.map(() => '?').join(', ');
                     
                     await new Promise((resolve, reject) => {
                         db.run(`INSERT INTO DOCUMENTACAO (${colunas.join(', ')}) VALUES (${placeholders})`, valores, function(err) {
-                            if (err) {
-                                erros.push('Documentação ' + d.empresa + ': ' + err.message);
-                            } else {
+                            if (err) reject(err);
+                            else {
                                 restaurados.documentacao++;
+                                resolve();
                             }
-                            resolve();
                         });
                     });
-                } catch (e) {
-                    erros.push('Documentação ' + d.empresa + ': ' + e.message);
+                } catch (err) {
+                    erros.push('Documentação ' + d.empresa + ': ' + err.message);
                 }
+            }
+        }
+        
+        console.log('✅ Documentação restaurada:', restaurados.documentacao);
+        
+        // Restaurar cursos habilitados
+        if (backup.dados.cursosHabilitados && backup.dados.cursosHabilitados.length > 0) {
+            await new Promise((resolve) => {
+                db.run('DELETE FROM habilitar_cursos', resolve);
+            });
+            
+            for (const c of backup.dados.cursosHabilitados) {
+                const colunas = Object.keys(c);
+                const valores = Object.values(c);
+                const placeholders = colunas.map(() => '?').join(', ');
+                await new Promise((resolve) => {
+                    db.run(`INSERT INTO habilitar_cursos (${colunas.join(', ')}) VALUES (${placeholders})`, valores, resolve);
+                });
+            }
+        }
+        
+        // Restaurar configuração
+        if (backup.dados.configuracao && Object.keys(backup.dados.configuracao).length > 0) {
+            const config = backup.dados.configuracao;
+            await new Promise((resolve) => {
+                db.run('DELETE FROM configuracao_relatorio WHERE id = 1', resolve);
+            });
+            
+            const colunas = Object.keys(config);
+            const valores = Object.values(config);
+            const placeholders = colunas.map(() => '?').join(', ');
+            await new Promise((resolve) => {
+                db.run(`INSERT INTO configuracao_relatorio (${colunas.join(', ')}) VALUES (${placeholders})`, valores, resolve);
+            });
+        }
+        
+        // Restaurar presença
+        if (backup.dados.presenca) {
+            try {
+                presencaMemoria = backup.dados.presenca.presencaMemoria || {};
+                comentariosPresenca = backup.dados.presenca.comentariosPresenca || {};
+                ocorrenciasPresenca = backup.dados.presenca.ocorrenciasPresenca || {};
+                presencaMesAtual = backup.dados.presenca.presencaMesAtual || getMesAnoAtual();
+                salvarDadosPresenca();
+                restaurados.presenca = true;
+                console.log('✅ Presença restaurada');
+            } catch (err) {
+                erros.push('Erro ao restaurar presença: ' + err.message);
             }
         }
         
         console.log('✅ Restauração concluída:', restaurados);
         if (erros.length > 0) {
-            console.log('⚠️ Erros:', erros.slice(0, 10));
+            console.log('⚠️ Erros:', erros);
         }
         
         res.json({ 
             success: true, 
             message: 'Backup restaurado com sucesso',
             restaurados: restaurados,
-            erros: erros.length > 0 ? erros.slice(0, 20) : undefined
+            erros: erros.length > 0 ? erros : undefined
         });
         
-    } catch (error) {
-        console.error('❌ Erro na restauração:', error);
-        res.status(500).json({ success: false, error: error.message });
+    } catch (err) {
+        console.error('❌ Erro na restauração:', err);
+        res.status(500).json({ 
+            success: false, 
+            error: 'Erro ao restaurar backup: ' + err.message,
+            restaurados: restaurados
+        });
     }
 });
 
 // Zerar funcionários
-app.delete('/api/backup/zerar/funcionarios', async (req, res) => {
-    try {
-        await new Promise((resolve, reject) => {
-            db.run('DELETE FROM SSMA', [], (err) => {
-                if (err) reject(err);
-                else resolve();
+app.delete('/api/backup/zerar/funcionarios', (req, res) => {
+    db.serialize(() => {
+        db.run('DELETE FROM SSMA', function(err) {
+            if (err) return res.status(500).json({ success: false, error: err.message });
+            
+            db.run("DELETE FROM sqlite_sequence WHERE name='SSMA'", function(err) {
+                if (err) console.log('Erro ao resetar sequence:', err);
+                res.json({ success: true, message: 'Funcionários zerados com sucesso' });
             });
         });
-        // Tentar resetar sequence (só funciona no SQLite)
-        try {
-            await new Promise((resolve) => {
-                db.run("DELETE FROM sqlite_sequence WHERE name='SSMA'", [], () => resolve());
-            });
-        } catch (e) { /* ignora no PostgreSQL */ }
-        
-        console.log('✅ Funcionários zerados com sucesso');
-        res.json({ success: true, message: 'Funcionários zerados com sucesso' });
-    } catch (err) {
-        console.error('Erro ao zerar funcionários:', err);
-        res.status(500).json({ success: false, error: err.message });
-    }
+    });
 });
 
 // Zerar fornecedores
-app.delete('/api/backup/zerar/fornecedores', async (req, res) => {
-    try {
-        await new Promise((resolve, reject) => {
-            db.run('DELETE FROM FORNECEDOR', [], (err) => {
-                if (err) reject(err);
-                else resolve();
+app.delete('/api/backup/zerar/fornecedores', (req, res) => {
+    db.serialize(() => {
+        db.run('DELETE FROM FORNECEDOR', function(err) {
+            if (err) return res.status(500).json({ success: false, error: err.message });
+            
+            db.run("DELETE FROM sqlite_sequence WHERE name='FORNECEDOR'", function(err) {
+                if (err) console.log('Erro ao resetar sequence:', err);
+                res.json({ success: true, message: 'Fornecedores zerados com sucesso' });
             });
         });
-        try {
-            await new Promise((resolve) => {
-                db.run("DELETE FROM sqlite_sequence WHERE name='FORNECEDOR'", [], () => resolve());
-            });
-        } catch (e) { /* ignora no PostgreSQL */ }
-        
-        console.log('✅ Fornecedores zerados com sucesso');
-        res.json({ success: true, message: 'Fornecedores zerados com sucesso' });
-    } catch (err) {
-        console.error('Erro ao zerar fornecedores:', err);
-        res.status(500).json({ success: false, error: err.message });
-    }
+    });
 });
 
 // Zerar documentação
-app.delete('/api/backup/zerar/documentacao', async (req, res) => {
-    try {
-        await new Promise((resolve, reject) => {
-            db.run('DELETE FROM DOCUMENTACAO', [], (err) => {
-                if (err) reject(err);
-                else resolve();
+app.delete('/api/backup/zerar/documentacao', (req, res) => {
+    db.serialize(() => {
+        db.run('DELETE FROM DOCUMENTACAO', function(err) {
+            if (err) return res.status(500).json({ success: false, error: err.message });
+            
+            db.run("DELETE FROM sqlite_sequence WHERE name='DOCUMENTACAO'", function(err) {
+                if (err) console.log('Erro ao resetar sequence:', err);
+                res.json({ success: true, message: 'Documentação zerada com sucesso' });
             });
         });
-        try {
-            await new Promise((resolve) => {
-                db.run("DELETE FROM sqlite_sequence WHERE name='DOCUMENTACAO'", [], () => resolve());
-            });
-        } catch (e) { /* ignora no PostgreSQL */ }
-        
-        console.log('✅ Documentação zerada com sucesso');
-        res.json({ success: true, message: 'Documentação zerada com sucesso' });
-    } catch (err) {
-        console.error('Erro ao zerar documentação:', err);
-        res.status(500).json({ success: false, error: err.message });
-    }
+    });
 });
 
 // Zerar lista de presença
@@ -3332,10 +3365,61 @@ app.delete('/api/backup/zerar/presenca', (req, res) => {
     }
 });
 
-// Iniciar servidor
-app.listen(PORT, () => {
+// Iniciar servidor (0.0.0.0 permite conexões de qualquer IP na rede)
+app.listen(PORT, '0.0.0.0', async () => {
     console.log(`🚀 SysControle Web rodando em http://localhost:${PORT}`);
     console.log(`📊 Sistema idêntico ao desktop, mas na web!`);
+    console.log(`🌐 Acesso na rede: http://SEU_IP:${PORT}`);
+    
+    // CORRIGIR BANCO POSTGRESQL AUTOMATICAMENTE (RENDER)
+    if (process.env.DATABASE_URL && process.env.DATABASE_URL.includes('postgres')) {
+        console.log(`\n🔧 Detectado PostgreSQL - Corrigindo estrutura do banco...`);
+        try {
+            const { Pool } = require('pg');
+            const pool = new Pool({
+                connectionString: process.env.DATABASE_URL,
+                ssl: { rejectUnauthorized: false }
+            });
+            
+            const client = await pool.connect();
+            
+            try {
+                // Corrigir uma coluna por vez para identificar qual está dando erro
+                console.log('  → Adicionando coluna Situacao em fornecedor...');
+                await client.query(`ALTER TABLE fornecedor ADD COLUMN IF NOT EXISTS Situacao CHAR(1) DEFAULT 'N'`).catch(e => console.log('    Já existe ou erro:', e.message));
+                
+                console.log('  → Adicionando coluna DataCadastro em fornecedor...');
+                await client.query(`ALTER TABLE fornecedor ADD COLUMN IF NOT EXISTS DataCadastro TIMESTAMP DEFAULT CURRENT_TIMESTAMP`).catch(e => console.log('    Já existe ou erro:', e.message));
+                
+                console.log('  → Adicionando coluna DataInativacao em fornecedor...');
+                await client.query(`ALTER TABLE fornecedor ADD COLUMN IF NOT EXISTS DataInativacao TIMESTAMP`).catch(e => console.log('    Já existe ou erro:', e.message));
+                
+                console.log('  → Adicionando coluna logo em configuracao_relatorio...');
+                await client.query(`ALTER TABLE configuracao_relatorio ADD COLUMN IF NOT EXISTS logo TEXT`).catch(e => console.log('    Já existe ou erro:', e.message));
+                
+                console.log('  → Atualizando registros existentes...');
+                await client.query(`UPDATE fornecedor SET Situacao = 'N' WHERE Situacao IS NULL`).catch(e => console.log('    Erro ao atualizar:', e.message));
+                
+                console.log('  → Criando índices...');
+                await client.query(`CREATE INDEX IF NOT EXISTS idx_fornecedor_situacao ON fornecedor(Situacao)`).catch(e => console.log('    Já existe ou erro:', e.message));
+                await client.query(`CREATE INDEX IF NOT EXISTS idx_ssma_nome ON ssma(Nome)`).catch(e => console.log('    Já existe ou erro:', e.message));
+                await client.query(`CREATE INDEX IF NOT EXISTS idx_ssma_empresa ON ssma(Empresa)`).catch(e => console.log('    Já existe ou erro:', e.message));
+                await client.query(`CREATE INDEX IF NOT EXISTS idx_ssma_situacao ON ssma(Situacao)`).catch(e => console.log('    Já existe ou erro:', e.message));
+                
+                console.log('✅ Correções aplicadas com sucesso!');
+            } finally {
+                client.release();
+                await pool.end();
+            }
+        } catch (err) {
+            console.error('❌ Erro ao corrigir banco PostgreSQL:', err.message);
+            console.error('   Stack:', err.stack);
+        }
+    }
+    
+    // VERIFICAR SE MUDOU DE MÊS AO INICIAR O SERVIDOR
+    console.log(`\n🔍 Verificando mudança de mês...`);
+    await verificarResetMes();
 });
 
 // Graceful shutdown
