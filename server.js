@@ -3371,52 +3371,6 @@ app.listen(PORT, '0.0.0.0', async () => {
     console.log(`📊 Sistema idêntico ao desktop, mas na web!`);
     console.log(`🌐 Acesso na rede: http://SEU_IP:${PORT}`);
     
-    // CORRIGIR BANCO POSTGRESQL AUTOMATICAMENTE (RENDER)
-    if (process.env.DATABASE_URL && process.env.DATABASE_URL.includes('postgres')) {
-        console.log(`\n🔧 Detectado PostgreSQL - Corrigindo estrutura do banco...`);
-        try {
-            const { Pool } = require('pg');
-            const pool = new Pool({
-                connectionString: process.env.DATABASE_URL,
-                ssl: { rejectUnauthorized: false }
-            });
-            
-            const client = await pool.connect();
-            
-            try {
-                // Corrigir uma coluna por vez para identificar qual está dando erro
-                console.log('  → Adicionando coluna Situacao em fornecedor...');
-                await client.query(`ALTER TABLE fornecedor ADD COLUMN IF NOT EXISTS Situacao CHAR(1) DEFAULT 'N'`).catch(e => console.log('    Já existe ou erro:', e.message));
-                
-                console.log('  → Adicionando coluna DataCadastro em fornecedor...');
-                await client.query(`ALTER TABLE fornecedor ADD COLUMN IF NOT EXISTS DataCadastro TIMESTAMP DEFAULT CURRENT_TIMESTAMP`).catch(e => console.log('    Já existe ou erro:', e.message));
-                
-                console.log('  → Adicionando coluna DataInativacao em fornecedor...');
-                await client.query(`ALTER TABLE fornecedor ADD COLUMN IF NOT EXISTS DataInativacao TIMESTAMP`).catch(e => console.log('    Já existe ou erro:', e.message));
-                
-                console.log('  → Adicionando coluna logo em configuracao_relatorio...');
-                await client.query(`ALTER TABLE configuracao_relatorio ADD COLUMN IF NOT EXISTS logo TEXT`).catch(e => console.log('    Já existe ou erro:', e.message));
-                
-                console.log('  → Atualizando registros existentes...');
-                await client.query(`UPDATE fornecedor SET Situacao = 'N' WHERE Situacao IS NULL`).catch(e => console.log('    Erro ao atualizar:', e.message));
-                
-                console.log('  → Criando índices...');
-                await client.query(`CREATE INDEX IF NOT EXISTS idx_fornecedor_situacao ON fornecedor(Situacao)`).catch(e => console.log('    Já existe ou erro:', e.message));
-                await client.query(`CREATE INDEX IF NOT EXISTS idx_ssma_nome ON ssma(Nome)`).catch(e => console.log('    Já existe ou erro:', e.message));
-                await client.query(`CREATE INDEX IF NOT EXISTS idx_ssma_empresa ON ssma(Empresa)`).catch(e => console.log('    Já existe ou erro:', e.message));
-                await client.query(`CREATE INDEX IF NOT EXISTS idx_ssma_situacao ON ssma(Situacao)`).catch(e => console.log('    Já existe ou erro:', e.message));
-                
-                console.log('✅ Correções aplicadas com sucesso!');
-            } finally {
-                client.release();
-                await pool.end();
-            }
-        } catch (err) {
-            console.error('❌ Erro ao corrigir banco PostgreSQL:', err.message);
-            console.error('   Stack:', err.stack);
-        }
-    }
-    
     // VERIFICAR SE MUDOU DE MÊS AO INICIAR O SERVIDOR
     console.log(`\n🔍 Verificando mudança de mês...`);
     await verificarResetMes();
