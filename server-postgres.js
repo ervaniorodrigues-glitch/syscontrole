@@ -1099,6 +1099,190 @@ app.post('/api/controle-presenca/salvar', (req, res) => {
     }
 });
 
+// GET - Buscar funcionários para controle de presença
+app.get('/api/controle-presenca/funcionarios', async (req, res) => {
+    try {
+        await verificarResetMes();
+        const result = await pool.query('SELECT id, Nome, Empresa, Funcao, Situacao FROM ssma WHERE Situacao = $1 ORDER BY Empresa, Nome', ['N']);
+        res.json({ data: result.rows, mesAno: presencaMesAtual });
+    } catch (err) {
+        console.error('Erro ao buscar funcionários:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// GET - Buscar dados de presença do mês atual
+app.get('/api/controle-presenca/dados', async (req, res) => {
+    try {
+        await verificarResetMes();
+        const dadosOriginais = presencaMemoria[presencaMesAtual] || {};
+        const comentarios = comentariosPresenca[presencaMesAtual] || {};
+        
+        // Normalizar dados para garantir formato correto
+        const dados = {};
+        for (const [funcId, diasFunc] of Object.entries(dadosOriginais)) {
+            dados[funcId] = {};
+            for (const [dia, valor] of Object.entries(diasFunc)) {
+                if (typeof valor === 'object' && valor !== null) {
+                    dados[funcId][dia] = valor;
+                } else if (typeof valor === 'string') {
+                    if (valor === '-' || valor === '.') {
+                        dados[funcId][dia] = { status: '', isFolga: true };
+                    } else if (valor === '') {
+                        // Vazio - ignorar
+                    } else {
+                        dados[funcId][dia] = { status: valor.toUpperCase(), isFolga: false };
+                    }
+                }
+            }
+        }
+        
+        presencaMemoria[presencaMesAtual] = dados;
+        res.json({ data: dados, comentarios: comentarios, mesAno: presencaMesAtual });
+    } catch (err) {
+        console.error('Erro ao buscar dados de presença:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// POST - Salvar marcação de presença
+app.post('/api/controle-presenca/marcar', async (req, res) => {
+    try {
+        await verificarResetMes();
+        const { funcionarioId, dia, status, isFolga } = req.body;
+        
+        if (!presencaMemoria[presencaMesAtual]) {
+            presencaMemoria[presencaMesAtual] = {};
+        }
+        
+        if (!presencaMemoria[presencaMesAtual][funcionarioId]) {
+            presencaMemoria[presencaMesAtual][funcionarioId] = {};
+        }
+        
+        if (status === '' || status === null) {
+            if (isFolga) {
+                presencaMemoria[presencaMesAtual][funcionarioId][dia] = { status: '', isFolga: true };
+            } else {
+                delete presencaMemoria[presencaMesAtual][funcionarioId][dia];
+            }
+        } else {
+            presencaMemoria[presencaMesAtual][funcionarioId][dia] = { status: status, isFolga: false };
+        }
+        
+        res.json({ success: true, mesAno: presencaMesAtual });
+    } catch (err) {
+        console.error('Erro ao marcar presença:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// POST - Salvar comentário de presença
+app.post('/api/controle-presenca/comentario', async (req, res) => {
+    try {
+        await verificarResetMes();
+        const { funcionarioId, dia, comentario } = req.body;
+        const chave = `${funcionarioId}_${dia}`;
+        
+        if (!comentariosPresenca[presencaMesAtual]) {
+            comentariosPresenca[presencaMesAtual] = {};
+        }
+        
+        if (comentario && comentario.trim()) {
+            comentariosPresenca[presencaMesAtual][chave] = {
+                texto: comentario.trim(),
+                data: new Date().toISOString()
+            };
+        } else {
+            delete comentariosPresenca[presencaMesAtual][chave];
+        }
+        
+        res.json({ success: true });
+    } catch (err) {
+        console.error('Erro ao salvar comentário:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// GET - Contar presença
+app.get('/api/presenca/count', async (req, res) => {
+    try {
+        await verificarResetMes();
+        const total = Object.keys(presencaMemoria[presencaMesAtual] || {}).length;
+        res.json({ total });
+    } catch (err) {
+        console.error('Erro ao contar presença:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// GET - Listar ocorrências do mês atual
+app.get('/api/ocorrencias', async (req, res) => {
+    try {
+        await verificarResetMes();
+        const ocorrencias = ocorrenciasPresenca[presencaMesAtual] || [];
+        const ordenadas = [...ocorrencias].sort((a, b) => new Date(b.data) - new Date(a.data));
+        res.json({ data: ordenadas, mesAno: presencaMesAtual });
+    } catch (err) {
+        console.error('Erro ao listar ocorrências:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// POST - Criar nova ocorrência
+app.post('/api/ocorrencias', async (req, res) => {
+    try {
+        await verificarResetMes();
+        const { texto } = req.body;
+        
+        if (!texto || !texto.trim()) {
+            return res.status(400).json({ success: false, error: 'Texto é obrigatório' });
+        }
+        
+        if (!ocorrenciasPresenca[presencaMesAtual]) {
+            ocorrenciasPresenca[presencaMesAtual] = [];
+        }
+        
+        const novaOcorrencia = {
+            id: Date.now().toString(),
+            texto: texto.trim(),
+            data: new Date().toISOString()
+        };
+        
+        ocorrenciasPresenca[presencaMesAtual].push(novaOcorrencia);
+        salvarDadosPresenca();
+        
+        res.json({ success: true, data: novaOcorrencia });
+    } catch (err) {
+        console.error('Erro ao criar ocorrência:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
+// DELETE - Excluir ocorrência
+app.delete('/api/ocorrencias/:id', async (req, res) => {
+    try {
+        await verificarResetMes();
+        const { id } = req.params;
+        
+        if (!ocorrenciasPresenca[presencaMesAtual]) {
+            return res.status(404).json({ success: false, error: 'Ocorrência não encontrada' });
+        }
+        
+        const index = ocorrenciasPresenca[presencaMesAtual].findIndex(o => o.id === id);
+        if (index === -1) {
+            return res.status(404).json({ success: false, error: 'Ocorrência não encontrada' });
+        }
+        
+        ocorrenciasPresenca[presencaMesAtual].splice(index, 1);
+        salvarDadosPresenca();
+        
+        res.json({ success: true });
+    } catch (err) {
+        console.error('Erro ao excluir ocorrência:', err);
+        res.status(500).json({ error: err.message });
+    }
+});
+
 // ============================================
 // INICIALIZAÇÃO DO SERVIDOR
 // ============================================
