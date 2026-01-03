@@ -2,12 +2,18 @@
 // No Render, sempre usa PostgreSQL
 // Localmente, usa SQLite
 
-const isLocal = !process.env.DATABASE_URL;
+console.log('🔍 Verificando ambiente...');
+console.log('   DATABASE_URL existe?', !!process.env.DATABASE_URL);
+console.log('   NODE_ENV:', process.env.NODE_ENV);
+console.log('   PORT:', process.env.PORT);
 
-if (isLocal) {
-    console.log('📁 Iniciando com SQLite (Local)...');
-    require('./server.js');
-} else {
-    console.log('🐘 Iniciando com PostgreSQL (Render)...');
+// Se DATABASE_URL existe OU se PORT é diferente de 3000 (Render usa porta aleatória)
+const isRender = process.env.DATABASE_URL || (process.env.PORT && process.env.PORT !== '3000');
+
+if (isRender) {
+    console.log('🐘 Ambiente: RENDER - Usando PostgreSQL');
     require('./server-postgres.js');
+} else {
+    console.log('📁 Ambiente: LOCAL - Usando SQLite');
+    require('./server.js');
 }
